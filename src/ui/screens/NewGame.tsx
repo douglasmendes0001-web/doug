@@ -4,7 +4,7 @@ import { LIGAS } from '../../engine/data/ligas';
 import { PAISES } from '../../engine/data/paises';
 import { SLOTS, listSaves, loadEditorWorld, type SaveSummary } from '../../engine/save';
 import { newGame } from '../../engine/season';
-import type { CarreiraJogador, CountryCode } from '../../engine/types';
+import type { AutoSave, CarreiraJogador, CountryCode } from '../../engine/types';
 import { createWorld, type World } from '../../engine/world';
 import { Flag } from '../components/Flag';
 import { useGame } from '../game';
@@ -46,6 +46,7 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
   const [halfSeconds, setHalfSeconds] = useState<15 | 30 | 60>(30);
   const [mundialAnual, setMundialAnual] = useState(false);
   const [slot, setSlot] = useState(1);
+  const [autoSave, setAutoSave] = useState<AutoSave>('partida');
   const [creating, setCreating] = useState(false);
 
   const ligas = LIGAS.filter((l) => l.country === country);
@@ -61,7 +62,7 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
     setTimeout(() => {
       // O banco do editor é copiado: a carreira não altera o banco salvo.
       const base = useEditor && editorWorld ? structuredClone(editorWorld) : randomWorld;
-      const state = newGame({ seed, coach: coachInput, clubId, settings: { halfSeconds, mundialAnual } }, base);
+      const state = newGame({ seed, coach: coachInput, clubId, settings: { halfSeconds, mundialAnual, autoSave } }, base);
       state.saveSlot = slot;
       setState(state);
     }, 30);
@@ -188,6 +189,15 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
               <button className={`choice ${!mundialAnual ? 'on' : ''}`} onClick={() => setMundialAnual(false)}>A cada 4 anos (critério FIFA, 1ª em 2029)</button>
               <button className={`choice ${mundialAnual ? 'on' : ''}`} onClick={() => setMundialAnual(true)}>Todo ano</button>
             </div>
+          </div>
+          <div className="form-field">
+            <label>Salvamento automático</label>
+            <div className="choice-row">
+              {([['partida', 'A cada partida'], ['sempre', 'Sempre'], ['manual', 'Manual']] as const).map(([id, label]) => (
+                <button key={id} className={`choice ${autoSave === id ? 'on' : ''}`} onClick={() => setAutoSave(id)}>{label}</button>
+              ))}
+            </div>
+            <span className="small muted">Dá para mudar depois em Ajustes.</span>
           </div>
           <div className="form-field">
             <label>Salvar no slot</label>

@@ -65,7 +65,7 @@ function Fired() {
 }
 
 function GameShell() {
-  const { state, update, toast, toastMsg } = useLoadedGame();
+  const { state, update, toast, toastMsg, afterMatch } = useLoadedGame();
   const [tab, setTab] = useState<Tab>('elenco');
   const [matchFx, setMatchFx] = useState<Fixture | null>(null);
   const [busy, setBusy] = useState(false);
@@ -95,7 +95,7 @@ function GameShell() {
           key={matchFx.id}
           fixture={matchFx}
           onBack={() => { setMatchFx(null); setTab('elenco'); }}
-          onDone={(r) => { setMatchFx(null); afterReports([r]); }}
+          onDone={(r) => { setMatchFx(null); afterReports([r]); afterMatch(); }}
         />
       </div>
     );

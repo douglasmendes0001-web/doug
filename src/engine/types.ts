@@ -320,9 +320,14 @@ export interface Lineup {
 
 export type TreinoIntensidade = 'leve' | 'normal' | 'forte';
 
+/** Quando salvar automaticamente: a cada alteração, ao fim de cada partida ou só manualmente. */
+export type AutoSave = 'sempre' | 'partida' | 'manual';
+
 export interface Settings {
   halfSeconds: 15 | 30 | 60;
   mundialAnual: boolean;
+  /** Padrão: 'partida'. */
+  autoSave?: AutoSave;
 }
 
 export interface SeasonRecord {
@@ -357,6 +362,8 @@ export interface GameState {
   financeLog: FinanceEntry[];
   /** Slot de salvamento (1 a 3). */
   saveSlot?: number;
+  /** A carreira foi alterada pelo modo editor. */
+  edited?: boolean;
   /** Nota de desempenho da última temporada (patrocínios e investidores). */
   lastPerformance?: number;
   /** Patrocinadores do clube do usuário. */

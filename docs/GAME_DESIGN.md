@@ -15,6 +15,15 @@
   - criar jogadores novos, que começam com **15 anos**, e excluir jogadores.
 
   O editor não altera carreiras já salvas, e o botão "Restaurar banco original" desfaz todas as edições.
+- **Editor dentro da carreira** (Ajustes → "Abrir editor da carreira"): as mesmas edições valem na hora
+  para a carreira em andamento, em qualquer clube, inclusive nos garotos da base. A carreira fica
+  marcada como "editada".
+- **Salvamento automático**, escolhido no novo jogo ou em Ajustes:
+  - "A cada partida" (padrão): salva ao fim de cada jogo do seu time;
+  - "Sempre": salva a cada alteração;
+  - "Manual": só salva com "Salvar agora".
+
+  Ajustes mostra se há alterações não salvas e oferece "Sair sem salvar".
 
 ## Técnico
 

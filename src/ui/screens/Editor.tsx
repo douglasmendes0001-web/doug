@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ESTILOS, ESTILOS_POR_POS, type EstiloId } from '../../engine/data/estilos';
 import { HABILIDADES, HABILIDADES_POR_POS } from '../../engine/data/habilidades';
 import { LIGAS } from '../../engine/data/ligas';
@@ -8,7 +8,7 @@ import {
 } from '../../engine/editor';
 import { POS_ORDER, STAR_LABEL, abilityCount } from '../../engine/players';
 import { deleteEditorWorld, loadEditorWorld, saveEditorWorld } from '../../engine/save';
-import type { CountryCode, Pos } from '../../engine/types';
+import type { CountryCode, Player, Pos } from '../../engine/types';
 import { createWorld, type World } from '../../engine/world';
 import { Flag } from '../components/Flag';
 import { formatMoney } from '../format';
@@ -119,11 +119,21 @@ function PlayerEditor({ world, id, onChange, onClose }: { world: World; id: numb
   );
 }
 
-function ClubEditor({ world, clubId, onChange, onBack }: { world: World; clubId: number; onChange: () => void; onBack: () => void }) {
+export interface ClubEditorProps {
+  world: World;
+  clubId: number;
+  onChange: () => void;
+  onBack: () => void;
+  /** Ajustes extras ao criar jogador (ex.: respeito pelo técnico na carreira). */
+  onPlayerAdded?: (p: Player) => void;
+}
+
+export function ClubEditor({ world, clubId, onChange, onBack, onPlayerAdded }: ClubEditorProps) {
   const club = world.clubs[clubId];
   const [selected, setSelected] = useState<number | null>(null);
   const [novoPos, setNovoPos] = useState<Pos>('ATA');
   const players = club.playerIds.map((id) => world.players[id]).sort((a, b) => POS_ORDER[a.pos] - POS_ORDER[b.pos] || b.force - a.force);
+  const youth = (club.youthIds ?? []).map((id) => world.players[id]).filter((p) => !p.retired);
   const edit = (e: Parameters<typeof editClub>[2]) => { editClub(world, clubId, e); onChange(); };
   return (
     <div>
@@ -175,6 +185,7 @@ function ClubEditor({ world, clubId, onChange, onBack }: { world: World; clubId:
           </select>
           <button className="btn primary" style={{ flex: 1 }} onClick={() => {
             const p = addPlayer(world, clubId, novoPos);
+            onPlayerAdded?.(p);
             recalcClubForce(world, clubId);
             onChange();
             setSelected(p.id);
@@ -184,7 +195,48 @@ function ClubEditor({ world, clubId, onChange, onBack }: { world: World; clubId:
       </div>
 
       {players.map((p) => <PlayerRow key={p.id} p={p} hideResp onClick={() => setSelected(p.id)} />)}
+      {youth.length > 0 && <h3 style={{ margin: '12px 4px 6px' }}>Categorias de base</h3>}
+      {youth.map((p) => <PlayerRow key={p.id} p={p} hideResp onClick={() => setSelected(p.id)} />)}
       {selected !== null && <PlayerEditor world={world} id={selected} onChange={onChange} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
+/** Lista de clubes com busca e filtro por país/liga. */
+export function ClubBrowser({ world, onPick, highlight }: { world: World; onPick: (id: number) => void; highlight?: number }) {
+  const [country, setCountry] = useState<CountryCode>(highlight !== undefined ? world.clubs[highlight].country : 'BRA');
+  const [leagueId, setLeagueId] = useState<string>(highlight !== undefined ? world.clubs[highlight].leagueId ?? 'OUTROS' : 'BRA1');
+  const [busca, setBusca] = useState('');
+  const q = busca.trim().toLowerCase();
+  const clubs = q
+    ? world.clubs.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 40)
+    : world.clubs.filter((c) => (leagueId === 'OUTROS' ? c.country === country && !c.leagueId : c.leagueId === leagueId)).sort((a, b) => b.baseForce - a.baseForce);
+  return (
+    <div className="panel">
+      <input className="input" placeholder="Buscar clube pelo nome..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+      {!busca && (
+        <div className="toolbar">
+          <select className="sel" value={country} onChange={(e) => {
+            const c = e.target.value as CountryCode;
+            setCountry(c);
+            setLeagueId(LIGAS.find((l) => l.country === c)?.id ?? 'OUTROS');
+          }}>
+            {PAISES_COM_CLUBES.map((c) => <option key={c} value={c}>{PAISES[c].name}</option>)}
+          </select>
+          <select className="sel" style={{ flex: 1, minWidth: 0 }} value={leagueId} onChange={(e) => setLeagueId(e.target.value)}>
+            {LIGAS.filter((l) => l.country === country).map((l) => <option key={l.id} value={l.id}>{l.tournaments[0].name.replace(/ — (Apertura|Finalización)/, '')}</option>)}
+            <option value="OUTROS">Outros clubes (estaduais)</option>
+          </select>
+        </div>
+      )}
+      {clubs.map((c) => (
+        <button key={c.id} className="club-pick" style={{ ['--c1' as string]: c.colors[0], outline: c.id === highlight ? '2px solid var(--gold)' : undefined }} onClick={() => onPick(c.id)}>
+          <Flag country={c.country} />
+          <span className="grow">{c.name}<div className="small muted">{c.playerIds.length} jogadores · CT {c.ct} · base {c.baseLevel}</div></span>
+          <b style={{ fontSize: 20 }}>{Math.round(c.baseForce)}</b>
+        </button>
+      ))}
+      {clubs.length === 0 && <p className="muted small">Nenhum clube encontrado.</p>}
     </div>
   );
 }
@@ -194,9 +246,6 @@ export function Editor({ onBack }: { onBack: () => void }) {
   const [, setVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
-  const [country, setCountry] = useState<CountryCode>('BRA');
-  const [leagueId, setLeagueId] = useState<string>('BRA1');
-  const [busca, setBusca] = useState('');
   const [clubId, setClubId] = useState<number | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
@@ -219,13 +268,6 @@ export function Editor({ onBack }: { onBack: () => void }) {
   };
 
   const world = worldRef.current;
-  const clubs = useMemo(() => {
-    if (!world) return [];
-    const q = busca.trim().toLowerCase();
-    if (q) return world.clubs.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 40);
-    return world.clubs.filter((c) => (leagueId === 'OUTROS' ? c.country === country && !c.leagueId : c.leagueId === leagueId))
-      .sort((a, b) => b.baseForce - a.baseForce);
-  }, [world, busca, leagueId, country]);
 
   if (loading || !world) return <div className="screen"><div className="loading">Abrindo banco de dados...</div></div>;
 
@@ -254,32 +296,7 @@ export function Editor({ onBack }: { onBack: () => void }) {
       {clubId !== null ? (
         <ClubEditor world={world} clubId={clubId} onChange={changed} onBack={() => setClubId(null)} />
       ) : (
-        <div className="panel">
-          <input className="input" placeholder="Buscar clube pelo nome..." value={busca} onChange={(e) => setBusca(e.target.value)} />
-          {!busca && (
-            <div className="toolbar">
-              <select className="sel" value={country} onChange={(e) => {
-                const c = e.target.value as CountryCode;
-                setCountry(c);
-                setLeagueId(LIGAS.find((l) => l.country === c)?.id ?? 'OUTROS');
-              }}>
-                {PAISES_COM_CLUBES.map((c) => <option key={c} value={c}>{PAISES[c].name}</option>)}
-              </select>
-              <select className="sel" style={{ flex: 1, minWidth: 0 }} value={leagueId} onChange={(e) => setLeagueId(e.target.value)}>
-                {LIGAS.filter((l) => l.country === country).map((l) => <option key={l.id} value={l.id}>{l.tournaments[0].name.replace(/ — (Apertura|Finalización)/, '')}</option>)}
-                <option value="OUTROS">Outros clubes (estaduais)</option>
-              </select>
-            </div>
-          )}
-          {clubs.map((c) => (
-            <button key={c.id} className="club-pick" style={{ ['--c1' as string]: c.colors[0] }} onClick={() => setClubId(c.id)}>
-              <Flag country={c.country} />
-              <span className="grow">{c.name}<div className="small muted">{c.playerIds.length} jogadores · CT {c.ct} · base {c.baseLevel}</div></span>
-              <b style={{ fontSize: 20 }}>{Math.round(c.baseForce)}</b>
-            </button>
-          ))}
-          {clubs.length === 0 && <p className="muted small">Nenhum clube encontrado.</p>}
-        </div>
+        <ClubBrowser world={world} onPick={setClubId} />
       )}
     </div>
   );

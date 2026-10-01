@@ -1,5 +1,7 @@
 // Tipos centrais do motor do jogo. Nenhum código de UI deve ser importado aqui.
 
+import type { EstiloId, TaticaId } from './data/estilos';
+
 export type Pos = 'G' | 'LD' | 'ZG' | 'LE' | 'VOL' | 'MEI' | 'ATA';
 export type Setor = 'GOL' | 'DEF' | 'MEI' | 'ATA';
 
@@ -23,7 +25,15 @@ export interface Player {
   age: number;
   force: number;
   potential: number;
-  traits: [string, string];
+  /** Classe do jogador (1-7): 1-3 normais, 4-5 desequilibram, 6-7 lendários. */
+  stars: number;
+  /** Até quantas estrelas o jogador ainda pode chegar. */
+  starCap: number;
+  /** Joia lendária (nasce na base com chance ligada ao investimento). */
+  legend?: boolean;
+  /** Índices no banco de habilidades (4, 5 ou 6 conforme as estrelas). */
+  abilities: number[];
+  style: EstiloId;
   personality: Personalidade;
   /** 0-100 — fôlego atual. */
   energy: number;
@@ -39,10 +49,17 @@ export interface Player {
   yellowCards: number;
   seasonGoals: number;
   seasonGames: number;
+  seasonAssists: number;
   benchStreak: number;
   value: number;
   salary: number;
   forSale: boolean;
+  /** Último ano de contrato (o vínculo termina em dezembro desse ano). */
+  contractUntil: number;
+  /** Emprestado por outro clube até o fim do ano indicado. */
+  loan?: { fromClubId: number; untilYear: number };
+  /** Jogador das categorias de base (15-20 anos), fora do elenco profissional. */
+  youth?: boolean;
   /** Promessa de oportunidade feita pelo técnico (slot limite). */
   promiseUntilSlot?: number;
   retired?: boolean;
@@ -78,7 +95,40 @@ export interface Club {
   playerIds: number[];
   /** Força média de referência (usada para geração e para IA). */
   baseForce: number;
+  /** Nível das categorias de base (1-5). */
+  baseLevel: number;
+  /** Jogadores da base (15-20 anos). */
+  youthIds: number[];
+  /** Dinheiro investido na base na temporada (patrocínios de base, investidores, clube). */
+  baseInvest: number;
+  /** Investidores que ficam com uma fatia das vendas. */
+  investors: Investor[];
 }
+
+export interface Investor {
+  name: string;
+  /** Percentual das vendas de jogadores (0-1). */
+  share: number;
+  untilYear: number;
+}
+
+export interface Sponsor {
+  name: string;
+  sector: string;
+  /** 1 (marca pequena) a 5 (gigante). */
+  tier: number;
+  weekly: number;
+  untilYear: number;
+  /** Temporadas de parceria com o clube. */
+  seasons: number;
+  /** Bônus pago por título conquistado. */
+  bonusTitle: number;
+  /** Cláusula de desempenho: corta o valor se a temporada for ruim. */
+  clausula?: boolean;
+}
+
+/** clubId de jogadores sem clube (agentes livres). */
+export const FREE_AGENT = -1;
 
 export type CarreiraJogador = 'umClube' | 'variosClubes';
 
@@ -143,7 +193,7 @@ export interface Fixture {
   prevLeg?: number;
   weather?: Clima;
   temperature?: number;
-  scorers?: { clubId: number; playerId: number; minute: number }[];
+  scorers?: { clubId: number; playerId: number; minute: number; assistId?: number }[];
 }
 
 export interface TableRow {
@@ -261,6 +311,7 @@ export type Formacao = '4-4-2' | '4-3-3' | '3-5-2' | '4-5-1' | '5-3-2' | '4-2-3-
 
 export interface Lineup {
   formation: Formacao;
+  tactic: TaticaId;
   starters: number[];
   bench: number[];
 }
@@ -302,6 +353,10 @@ export interface GameState {
   /** Classificados para torneios continentais da próxima temporada. */
   qualifications?: Record<string, number[]>;
   financeLog: FinanceEntry[];
+  /** Nota de desempenho da última temporada (patrocínios e investidores). */
+  lastPerformance?: number;
+  /** Patrocinadores do clube do usuário. */
+  sponsors: { master: Sponsor | null; base: Sponsor[] };
   /** Índice do anfitrião do Mundial (rotação entre confederações). */
   mundialEdition: number;
 }

@@ -108,7 +108,7 @@ function nextSlot(comp: Competition): number {
   return s;
 }
 
-function makeGroups(st: RRStageDef, entrants: number[], rng: Rng, isFirstStage: boolean): number[][] {
+export function makeGroups(st: RRStageDef, entrants: number[], rng: Rng, isFirstStage: boolean): number[][] {
   const g = st.groups;
   if (g === 1) return [entrants.slice()];
   const mode = st.grouping ?? (isFirstStage ? 'draw' : 'snake');
@@ -336,7 +336,7 @@ function stageFixtures(state: GameState, comp: Competition, stageIdx: number): F
   return state.fixtures.filter((f) => f.compId === comp.def.id && f.stageIdx === stageIdx);
 }
 
-function qualifiers(def: RRStageDef | SwissStageDef, st: StageState): number[] {
+export function qualifiers(def: RRStageDef | SwissStageDef, st: Pick<StageState, "tables">): number[] {
   const tables = st.tables.map(sortedTable);
   if (def.type === 'swiss') return tables[0].slice(0, def.advanceTotal).map((r) => r.clubId);
   if (def.advance) {
@@ -361,7 +361,7 @@ function qualifiers(def: RRStageDef | SwissStageDef, st: StageState): number[] {
  * Depois de cada dia de jogos: encerra fases concluídas, cria a próxima fase
  * ou a próxima rodada do mata-mata. Retorna true se a competição terminou agora.
  */
-export function advanceCompetition(state: GameState, comp: Competition, rng: Rng): boolean {
+export function advanceCompetition(state: GameState, comp: Competition, rng: Rng, pending?: Map<string, number>): boolean {
   if (comp.finished) return false;
   const idx = comp.stageIdx;
   const def = comp.def.stages[idx];
@@ -369,8 +369,9 @@ export function advanceCompetition(state: GameState, comp: Competition, rng: Rng
   if (!st.started) return false;
 
   if (def.type === 'rr' || def.type === 'swiss') {
-    const fxs = stageFixtures(state, comp, idx);
-    if (fxs.some((f) => !f.played)) return false;
+    if (pending) {
+      if ((pending.get(`${comp.def.id}:${idx}`) ?? 0) > 0) return false;
+    } else if (stageFixtures(state, comp, idx).some((f) => !f.played)) return false;
     st.finished = true;
     const nextDef = comp.def.stages[idx + 1];
     if (!nextDef) {
@@ -480,4 +481,15 @@ export function koRoundName(participants: number): string {
     case 16: return 'Oitavas de final';
     default: return `Fase de ${participants}`;
   }
+}
+
+/** Jogos ainda não disputados por competição e fase (chave "comp:fase"). */
+export function pendingByStage(state: GameState): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const f of state.fixtures) {
+    if (f.played) continue;
+    const k = `${f.compId}:${f.stageIdx}`;
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
 }

@@ -168,6 +168,8 @@ function buildClubsAndPlayers(drafts: ClubDraft[], rng: Rng): World {
       stadium: { name: d.country === 'BRA' ? `Estádio do ${d.name}` : `${d.city ?? d.name} Arena`, capacity: Math.max(2000, capacity) },
       ct: clamp(Math.round(1 + 4 * (1 - d.rankFrac) * ecoCap + (d.eco > 1 ? 1 : 0)), 1, 5),
       money: 0, ticketPrice: Math.round(40 + 25 * Math.min(d.eco, 3)), playerIds: [], baseForce,
+      baseLevel: clamp(Math.round(1 + 3 * (1 - d.rankFrac) * ecoCap + (d.eco > 1 ? 1 : 0)), 1, 5),
+      youthIds: [], baseInvest: 0, investors: [],
     };
     SQUAD_TEMPLATE.forEach((pos, i) => {
       const p = createPlayer(rng, players.length, id, d.country, pos, baseForce, { reserve: i % 2 === 1 && pos !== 'G' ? i > 12 : i === 2 });

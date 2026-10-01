@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { sortedTable, stageLabel } from '../../engine/competitions';
+import { LIGAS, VAGAS_CONMEBOL, VAGAS_UEFA } from '../../engine/data/ligas';
 import { PAISES } from '../../engine/data/paises';
+import { forecastCompetition, type ForecastRow } from '../../engine/forecast';
 import { topScorers } from '../../engine/standings';
 import type { Competition, GameState } from '../../engine/types';
 import { useLoadedGame } from '../game';
@@ -66,6 +68,54 @@ function Tables({ state, comp, stageIdx }: { state: GameState; comp: Competition
   );
 }
 
+function Forecast({ state, comp }: { state: GameState; comp: Competition }) {
+  const [rows, setRows] = useState<{ key: string; data: ForecastRow[] } | null>(null);
+  const key = `${comp.def.id}:${state.year}:${state.slot}`;
+  const isLeague = comp.def.kind === 'liga' && comp.def.stages.length === 1;
+  const liga = LIGAS.find((l) => l.id === comp.def.leagueId);
+  const topN = comp.def.country ? VAGAS_CONMEBOL[comp.def.country]?.lib ?? VAGAS_UEFA[comp.def.country]?.ucl : undefined;
+  const topLabel = comp.def.country && VAGAS_CONMEBOL[comp.def.country] ? 'Libertadores' : 'Champions';
+  const run = () => setRows({ key, data: forecastCompetition(state, comp, 400, isLeague && comp.def.tier === 1 ? { topN, bottomN: liga?.swap } : { bottomN: liga?.swap }) });
+  if (comp.finished) return null;
+  const data = rows?.key === key ? rows.data : null;
+  const u = state.userClubId;
+  const shown = data ? data.filter((r, i) => i < 10 || r.clubId === u) : [];
+  return (
+    <div className="panel">
+      <div className="row-between">
+        <h2>{comp.def.id === 'LIB' ? 'Previsão da Libertadores' : 'Previsão'}</h2>
+        <button className="btn small" onClick={run}>{data ? 'Recalcular' : 'Simular 400x'}</button>
+      </div>
+      {!data && <p className="small muted">Simula o restante da competição 400 vezes com base na força dos elencos e mostra as chances de cada clube.</p>}
+      {data && (
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>#</th><th>Clube</th><th>Título</th>
+              {isLeague ? <>{comp.def.tier === 1 && topN && <th>{topLabel}</th>}{liga?.swap && <th>Queda</th>}</> : <th>Passa de fase</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r, i) => (
+              <tr key={r.clubId} className={r.clubId === u ? 'me' : ''}>
+                <td>{i + 1}</td>
+                <td>{state.clubs[r.clubId].name}</td>
+                <td><b>{(r.title * 100).toFixed(1)}%</b><div className="prob-bar"><div style={{ width: `${r.title * 100}%` }} /></div></td>
+                {isLeague ? (
+                  <>
+                    {comp.def.tier === 1 && topN && <td>{(r.top * 100).toFixed(0)}%</td>}
+                    {liga?.swap && <td className={r.bottom > 0.3 ? 'neg' : ''}>{(r.bottom * 100).toFixed(0)}%</td>}
+                  </>
+                ) : <td>{(r.advance * 100).toFixed(0)}%</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 export function Competitions() {
   const { state } = useLoadedGame();
   const u = state.userClubId;
@@ -96,6 +146,7 @@ export function Competitions() {
         </select>
       </div>
       {!comp && <div className="panel muted">Nenhuma competição.</div>}
+      {comp && <Forecast state={state} comp={comp} />}
       {comp && (
         <div className="panel">
           <div className="row-between">

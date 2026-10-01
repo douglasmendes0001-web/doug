@@ -8,6 +8,9 @@ import { pushMessage } from './inbox';
 import { autoLineup } from './lineup';
 import { SQUAD_TEMPLATE, createPlayer, marketValue, monthlySalary } from './players';
 import { Rng, clamp } from './rng';
+import { initialSponsors, sponsorReview, type SeasonPerformance } from './sponsors';
+import { contractsSeasonEnd } from './transfers';
+import { starGrowth, youthSeasonEnd } from './youth';
 import type { Competition, CountryCode, GameState } from './types';
 
 function leagueComps(state: GameState, l: LeagueSeed): Competition[] {
@@ -29,10 +32,21 @@ export function endSeason(state: GameState) {
   state.history.push({ year: state.year, champions });
   if (state.competitions.some((c) => c.def.id === 'MUN')) state.mundialEdition++;
 
-  evaluateCoach(state);
+  const objetivoCumprido = evaluateCoach(state);
   const qualifications = computeQualifications(state);
-  promotionRelegation(state);
+  const { subiu, caiu } = promotionRelegation(state);
   state.qualifications = qualifications;
+
+  const titulos = state.competitions.filter((c) => c.champion === state.userClubId).length;
+  let score = (objetivoCumprido ? 1 : -1) + titulos + (subiu ? 1 : 0) - (caiu ? 2 : 0);
+  if (state.coach.confTorcida >= 80) score++;
+  if (state.coach.confTorcida <= 30) score--;
+  const perf: SeasonPerformance = { score, objetivoCumprido, titulos, subiu, caiu };
+  state.lastPerformance = score;
+  if (!state.coach.fired) sponsorReview(state, rng, perf);
+
+  contractsSeasonEnd(state, rng);
+  youthSeasonEnd(state, rng);
   developPlayers(state, rng);
   for (const club of state.clubs) {
     const top = club.playerIds.map((id) => state.players[id].force).sort((a, b) => b - a).slice(0, 16);
@@ -42,16 +56,16 @@ export function endSeason(state: GameState) {
   state.coach.experience = clamp(state.coach.experience + 2, 0, 100);
   state.year++;
   state.rng = rng.state;
-  state.lineup = autoLineup(state.clubs[state.userClubId].playerIds.map((id) => state.players[id]), state.lineup.formation);
+  state.lineup = autoLineup(state.clubs[state.userClubId].playerIds.map((id) => state.players[id]), state.lineup.formation, new Set(), state.lineup.tactic);
 }
 
-function evaluateCoach(state: GameState) {
+function evaluateCoach(state: GameState): boolean {
   const club = state.clubs[state.userClubId];
   const l = LIGAS.find((x) => x.id === club.leagueId);
-  if (!l || state.objectiveRank === undefined) return;
+  if (!l || state.objectiveRank === undefined) return false;
   const ranking = leagueRanking(state, l);
   const pos = ranking.indexOf(club.id) + 1;
-  if (pos <= 0) return;
+  if (pos <= 0) return false;
   const ok = pos <= state.objectiveRank;
   state.coach.confDiretoria = clamp(state.coach.confDiretoria + (ok ? 15 : -20), 0, 100);
   pushMessage(state, 'diretoria', `Balanço da temporada ${state.year}`,
@@ -62,9 +76,12 @@ function evaluateCoach(state: GameState) {
     state.coach.fired = true;
     pushMessage(state, 'diretoria', 'Você foi demitido', `Sem cumprir o objetivo, a diretoria decidiu trocar o comando técnico.`);
   }
+  return ok;
 }
 
-function promotionRelegation(state: GameState) {
+function promotionRelegation(state: GameState): { subiu: boolean; caiu: boolean } {
+  let subiu = false;
+  let caiu = false;
   const moves: { clubId: number; leagueId: string; tier: number }[] = [];
   for (const l of LIGAS) {
     const lower = lowerLeague(l);
@@ -90,8 +107,11 @@ function promotionRelegation(state: GameState) {
           : `O ${club.name} foi rebaixado. Um dia triste para a nossa história.`);
       if (!promotedUp) state.coach.confDiretoria = clamp(state.coach.confDiretoria - 25, 0, 100);
       else state.coach.confDiretoria = clamp(state.coach.confDiretoria + 20, 0, 100);
+      if (promotedUp) subiu = true;
+      else caiu = true;
     }
   }
+  return { subiu, caiu };
 }
 
 function computeQualifications(state: GameState): Record<string, number[]> {
@@ -140,7 +160,8 @@ function developPlayers(state: GameState, rng: Rng) {
       else p.force -= rng.range(1, 4);
       p.force = Math.round(clamp(p.force, 1, 135));
       p.age++;
-      p.value = marketValue(p.force, p.age);
+      starGrowth(rng, p);
+      p.value = marketValue(p.force, p.age, p.stars);
       p.salary = Math.max(p.salary, monthlySalary(p.value) * 0.8);
       p.seasonGoals = 0;
       p.seasonGames = 0;
@@ -160,7 +181,7 @@ function developPlayers(state: GameState, rng: Rng) {
     let i = 0;
     while (club.playerIds.length < 22) {
       const pos = SQUAD_TEMPLATE[(club.playerIds.length + i++) % SQUAD_TEMPLATE.length];
-      const young = createPlayer(rng, state.players.length, club.id, club.country, pos, club.baseForce * 0.85, { age: rng.int(17, 19), reserve: true });
+      const young = createPlayer(rng, state.players.length, club.id, club.country, pos, club.baseForce * 0.85, { age: rng.int(17, 19), reserve: true, year: state.year + 1 });
       if (club.id === state.userClubId) young.respeito = initialRespeito(state.coach, young);
       state.players.push(young);
       club.playerIds.push(young.id);
@@ -191,5 +212,6 @@ export function takeJob(state: GameState, clubId: number) {
   state.userClubId = clubId;
   for (const id of state.clubs[clubId].playerIds) state.players[id].respeito = initialRespeito(coach, state.players[id]);
   state.lineup = autoLineup(state.clubs[clubId].playerIds.map((id) => state.players[id]), '4-4-2');
+  initialSponsors(state, new Rng(state.rng ^ clubId));
   pushMessage(state, 'diretoria', 'Bem-vindo', `Seja bem-vindo ao ${state.clubs[clubId].name}, ${coach.name}. Contamos com você.`);
 }

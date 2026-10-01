@@ -36,7 +36,8 @@ npm run android:open     # abre no Android Studio
 ```
 src/engine/
   data/          clubes reais (Brasil e América do Sul), ligas europeias genéricas,
-                 formatos de competição, países (clima, confederação), nomes
+                 formatos de competição, países, nomes, 910 habilidades por posição,
+                 estilos de jogador, 12 táticas, marcas de patrocínio
   world.ts       gera clubes e elencos (força aleatória dentro da faixa de cada liga)
   coach.ts       experiência do técnico, prestígio e respeito inicial do elenco
   match.ts       motor minuto a minuto (mando, clima, altitude, substituições)
@@ -45,9 +46,15 @@ src/engine/
   season.ts      ciclo do jogo: preparar/jogar partidas, avançar dias, pós-jogo
   endSeason.ts   campeões, acesso/rebaixamento, vagas continentais, evolução, demissão
   inbox.ts       mensagens da diretoria, torcida organizada, mídia e jogadores
-  clubOps.ts     finanças, estádio, CT, ingressos e mercado
+  clubOps.ts     finanças, estádio, CT e ingressos
+  transfers.ts   janelas (europeia/sul-americana), contratos, agentes livres, empréstimos
+  sponsors.ts    patrocínios (master e base) e investidores, ligados ao desempenho
+  youth.ts       categorias de base (15-20 anos) e joias lendárias
+  forecast.ts    previsão Monte Carlo (Libertadores, copas e ligas)
+  actions.ts     respostas às mensagens (propostas, patrocínio, contratos...)
 src/ui/          telas no estilo Brasfoot
 tests/           testes do motor
+scripts/         gerador do banco de habilidades
 docs/GAME_DESIGN.md  regras, algoritmos e a pesquisa dos formatos das ligas
 ```
 

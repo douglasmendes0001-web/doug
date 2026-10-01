@@ -1,10 +1,13 @@
 // Motor de partida minuto a minuto. O mesmo motor roda as partidas ao vivo
 // do usuário (um passo por "minuto" de relógio) e as partidas simuladas.
 //
-// Fatores considerados: força, fôlego, respeito pelo técnico, ritmo de jogo,
-// adequação de posição, mando de campo/torcida, clima, altitude, experiência
-// do técnico e o impacto (positivo ou negativo) de cada substituição.
+// Fatores considerados: força, estrelas, habilidades (com condições), estilo
+// de jogo de cada jogador, tática do técnico (e quão bem ele a executa),
+// fôlego, respeito pelo técnico, ritmo de jogo, adequação de posição, mando
+// de campo/torcida, clima, altitude e o impacto de cada substituição.
 
+import { ESTILOS, execucaoTatica, modsEfetivos, taticaById, type EstiloId, type TaticaId } from './data/estilos';
+import { HABILIDADES, type CondicaoHabilidade, type EfeitoHabilidade } from './data/habilidades';
 import { PAISES } from './data/paises';
 import { assignPositions, MAX_SUBS, positionFit } from './lineup';
 import { setorOf } from './players';
@@ -34,9 +37,12 @@ export interface MatchContext {
   rng: Rng;
   /** Mata-mata: gols de jogos anteriores do confronto (orientados para este jogo). */
   knockout?: { aggHome: number; aggAway: number };
+  /** Jogo grande (mata-mata, continental, final): ativa habilidades "em jogos grandes". */
+  bigGame?: boolean;
 }
 
-export type EventType = 'gol' | 'amarelo' | 'vermelho' | 'lesao' | 'sub' | 'info' | 'chance' | 'defesa' | 'penaltis' | 'reclamacao';
+export type EventType =
+  | 'gol' | 'amarelo' | 'vermelho' | 'lesao' | 'sub' | 'info' | 'chance' | 'defesa' | 'penaltis' | 'reclamacao' | 'estilo';
 
 export interface MatchEvent {
   minute: string;
@@ -44,6 +50,18 @@ export interface MatchEvent {
   type: EventType;
   text: string;
   playerId?: number;
+}
+
+/** Índices numéricos dos efeitos (acesso rápido em arrays tipados). */
+const EFEITOS: EfeitoHabilidade[] = [
+  'gk', 'gkout', 'gkair', 'pen', 'penk', 'build', 'lead', 'def', 'head', 'pass', 'card',
+  'stamina', 'cross', 'speed', 'shot', 'drib', 'press', 'assist', 'fk', 'hold',
+];
+const E = Object.fromEntries(EFEITOS.map((e, i) => [e, i])) as Record<EfeitoHabilidade, number>;
+
+interface AbilityRef {
+  ei: number;
+  cond: CondicaoHabilidade;
 }
 
 export interface OnField {
@@ -54,10 +72,16 @@ export interface OnField {
   injured: boolean;
   yellow: number;
   enteredAt: number;
+  ab: AbilityRef[];
+  /** Multiplicadores das habilidades ativas na situação atual, por efeito. */
+  mult: Float64Array;
 }
+
+type Mods = ReturnType<typeof modsEfetivos>;
 
 export interface SideState {
   ctx: TeamContext;
+  isHome: boolean;
   onField: OnField[];
   bench: Player[];
   out: Set<number>;
@@ -70,6 +94,18 @@ export interface SideState {
   teamMult: number;
   drainMult: number;
   altGap: number;
+  tactic: TaticaId;
+  execucao: number;
+  mods: Mods;
+  favored: Set<EstiloId>;
+  /** Bônus de liderança das habilidades ativas neste minuto. */
+  leadMult: number;
+  /** Jogadores em campo por estilo (recalculado a cada minuto). */
+  styles: Map<EstiloId, OnField[]>;
+  /** Quantidade de habilidades ativas por efeito. */
+  counts: Float64Array;
+  /** Situação (tempo, placar) para a qual o cache foi calculado; -1 = inválido. */
+  cacheKey: number;
   /** Ajustes de respeito gerados durante o jogo (substituições, etc.). */
   respeitoDelta: Map<number, number>;
   subImpact: Map<number, number>;
@@ -83,13 +119,24 @@ export interface SideState {
 const BASE_DRAIN = 0.42;
 /** Teto assintótico da vantagem relativa (log). Evita placares absurdos entre divisões muito distantes. */
 const RATIO_CAP = Math.log(2.2);
+const CHANCE_BASE = 0.104;
+const GOAL_BASE = 0.27;
+/** Multiplicador de rendimento por estrelas (índice = estrelas). 4-5 desequilibram; 6-7 são lendários. */
+const STAR_MULT = [1, 0.99, 1, 1.015, 1.05, 1.08, 1.12, 1.17];
 
 /** Comprime razões de força: 1,5 → ~1,45; 2 → ~1,74; 5 → ~2,14. */
 export function softRatio(r: number): number {
   return Math.exp(RATIO_CAP * Math.tanh(Math.log(Math.max(1e-6, r)) / RATIO_CAP));
 }
-const CHANCE_BASE = 0.097;
-const GOAL_BASE = 0.27;
+
+/** Fator das probabilidades de estilo: 1★ = 0,8 … 7★ = 2,0. */
+export function starFactor(stars: number): number {
+  return 0.6 + 0.2 * stars;
+}
+
+function abilityRefs(p: Player): AbilityRef[] {
+  return p.abilities.map((id) => HABILIDADES[id]).filter(Boolean).map((h) => ({ ei: E[h.efeito], cond: h.cond }));
+}
 
 export class MatchSim {
   readonly sides: [SideState, SideState];
@@ -98,7 +145,7 @@ export class MatchSim {
   half: 1 | 2 = 1;
   finished = false;
   pens?: [number, number];
-  scorers: { side: 0 | 1; playerId: number; minute: number }[] = [];
+  scorers: { side: 0 | 1; playerId: number; minute: number; assistId?: number }[] = [];
   private stoppage: [number, number];
   private rng: Rng;
 
@@ -119,17 +166,22 @@ export class MatchSim {
     const gap = altitudeGap(this.ctx.venue.altitude, t.club.altitude);
     const homeBoost = !this.ctx.neutral && isHome ? 1.045 + 0.05 * this.ctx.crowd : 1;
     const coachFactor = 0.96 + 0.08 * (t.coachExperience / 100);
-    const teamMult = homeBoost * weatherTechnique(this.ctx.weather.clima, hotness) * (1 - 0.025 * gap) * coachFactor;
-    const drainMult = weatherDrain(this.ctx.weather.clima, hotness) * (1 + 0.3 * gap);
+    const tatica = taticaById(t.lineup.tactic);
+    const execucao = execucaoTatica(tatica, t.coachExperience);
+    const mods = modsEfetivos(tatica, execucao);
+    const teamMult = homeBoost * weatherTechnique(this.ctx.weather.clima, hotness) * (1 - 0.025 * gap) * coachFactor * mods.rendimento;
+    const drainMult = weatherDrain(this.ctx.weather.clima, hotness) * (1 + 0.3 * gap) * mods.desgaste;
     return {
       ctx: t,
-      onField: starters.map((p) => ({ p, pos: posMap.get(p.id) ?? p.pos, mod: 0, injured: false, yellow: 0, enteredAt: 0 })),
+      isHome,
+      onField: starters.map((p) => ({ p, pos: posMap.get(p.id) ?? p.pos, mod: 0, injured: false, yellow: 0, enteredAt: 0, ab: abilityRefs(p), mult: new Float64Array(EFEITOS.length).fill(1) })),
       bench: t.lineup.bench.map((id) => byId.get(id)).filter((p): p is Player => !!p),
       out: new Set(),
       sentOff: new Set(),
       subsUsed: 0,
       goals: 0, shots: 0, onTarget: 0, posse: 0,
       teamMult, drainMult, altGap: gap,
+      tactic: tatica.id, execucao, mods, favored: new Set(tatica.favorece), leadMult: 1, styles: new Map(), counts: new Float64Array(EFEITOS.length), cacheKey: -1,
       respeitoDelta: new Map(),
       subImpact: new Map(),
       played: new Set(starters.map((p) => p.id)),
@@ -137,6 +189,64 @@ export class MatchSim {
       yellows: new Map(),
       hotness,
     };
+  }
+
+  // ---------------- Habilidades e estilos ----------------
+
+  private condActive(side: SideState, cond: CondicaoHabilidade): boolean {
+    const opp = side === this.sides[0] ? this.sides[1] : this.sides[0];
+    switch (cond) {
+      case 'sempre': return true;
+      case 'pressao': return side.goals < opp.goals;
+      case 'vencendo': return side.goals > opp.goals;
+      case 'fim': return this.half === 2 && this.minute >= 75;
+      case 'primeiro': return this.half === 1;
+      case 'grande': return !!this.ctx.bigGame;
+      case 'casa': return side.isHome && !this.ctx.neutral;
+      case 'fora': return !side.isHome && !this.ctx.neutral;
+      case 'chuva': return this.ctx.weather.clima === 'chuva';
+      case 'calor': return this.ctx.weather.clima === 'calor';
+      case 'altitude': return this.ctx.venue.altitude >= 2000;
+    }
+  }
+
+  /**
+   * Recalcula habilidades ativas e jogadores por estilo. As condições só mudam
+   * com o tempo de jogo, o placar ou mudanças em campo, então o cache só é
+   * refeito quando essa situação muda.
+   */
+  private refreshMinute() {
+    for (const side of this.sides) {
+      const opp = side === this.sides[0] ? this.sides[1] : this.sides[0];
+      const diff = side.goals - opp.goals;
+      const key = (this.half === 2 ? 1 : 0) + (this.half === 2 && this.minute >= 75 ? 2 : 0) + (diff > 0 ? 4 : diff < 0 ? 8 : 0);
+      if (key === side.cacheKey) continue;
+      side.cacheKey = key;
+      side.styles = new Map();
+      side.counts.fill(0);
+      for (const f of side.onField) {
+        f.mult.fill(1);
+        for (const a of f.ab) {
+          if (!this.condActive(side, a.cond)) continue;
+          f.mult[a.ei] += a.cond === 'sempre' ? 0.03 : 0.06;
+          side.counts[a.ei]++;
+        }
+        const list = side.styles.get(f.p.style);
+        if (list) list.push(f);
+        else side.styles.set(f.p.style, [f]);
+      }
+      side.leadMult = 1 + 0.005 * Math.min(4, side.counts[E.lead]);
+    }
+  }
+
+  /** Probabilidade de um estilo disparar: base x estrelas x fôlego x afinidade com a tática. */
+  private styleP(side: SideState, f: OnField, base: number): number {
+    const fav = side.favored.has(f.p.style) ? 1 + 0.35 * side.execucao : 1;
+    return base * starFactor(f.p.stars) * (0.6 + 0.4 * f.p.energy / 100) * fav * (f.injured ? 0.4 : 1);
+  }
+
+  private withStyle(side: SideState, style: EstiloId): OnField[] {
+    return side.styles.get(style) ?? [];
   }
 
   // ---------------- Avaliação ----------------
@@ -148,7 +258,7 @@ export class MatchSim {
     const ritmo = 0.95 + 0.07 * (p.oportunidade / 100);
     const sub = 1 + 0.12 * f.mod;
     const inj = f.injured ? 0.6 : 1;
-    return p.force * fitness * moral * ritmo * positionFit(p.pos, f.pos) * side.teamMult * sub * inj;
+    return p.force * (STAR_MULT[p.stars] ?? 1) * fitness * moral * ritmo * positionFit(p.pos, f.pos) * side.teamMult * side.leadMult * sub * inj;
   }
 
   private sector(side: SideState) {
@@ -156,27 +266,28 @@ export class MatchSim {
     let gk = 0;
     for (const f of side.onField) {
       const e = this.eff(side, f);
-      const t = f.p.traits;
-      const has = (x: string) => t[0] === x || t[1] === x;
+      const D = f.mult[E.def];
+      const P = f.mult[E.pass] * f.mult[E.build];
+      const A = f.mult[E.drib] * f.mult[E.speed] * f.mult[E.hold];
       switch (f.pos) {
         case 'G':
-          gk = e * (has('Reflexo') || has('Colocação') ? 1.05 : 1);
+          gk = e * f.mult[E.gk];
           break;
         case 'ZG':
-          def += e * (has('Marcação') || has('Desarme') ? 1.04 : 1);
+          def += e * D; mid += 0.05 * e * P;
           break;
         case 'LD':
         case 'LE':
-          def += 0.8 * e; mid += 0.3 * e; att += 0.15 * e * (has('Cruzamento') ? 1.15 : 1);
+          def += 0.8 * e * D; mid += 0.3 * e * P; att += 0.15 * e * A * f.mult[E.cross];
           break;
         case 'VOL':
-          def += 0.5 * e * (has('Desarme') ? 1.04 : 1); mid += 0.6 * e * (has('Passe') ? 1.04 : 1); att += 0.1 * e;
+          def += 0.5 * e * D; mid += 0.6 * e * P; att += 0.1 * e;
           break;
         case 'MEI':
-          def += 0.15 * e; mid += e * (has('Armação') || has('Passe') ? 1.04 : 1); att += 0.6 * e * (has('Drible') ? 1.03 : 1);
+          def += 0.15 * e; mid += e * P; att += 0.6 * e * A;
           break;
         case 'ATA':
-          mid += 0.25 * e; att += e * (has('Velocidade') || has('Drible') ? 1.03 : 1);
+          mid += 0.25 * e * (f.p.style === 'ata_segundo' ? 1.4 : 1); att += e * A;
           break;
       }
     }
@@ -211,6 +322,7 @@ export class MatchSim {
       this.push(-1, 'info', 'Começa a partida!');
     }
     this.minute++;
+    this.refreshMinute();
     this.drain();
     this.playMinute();
     this.aiSubs();
@@ -259,7 +371,7 @@ export class MatchSim {
         const p = f.p;
         let d = BASE_DRAIN * s.drainMult;
         if (p.age > 30) d *= 1 + (p.age - 30) * 0.02;
-        if (p.traits.includes('Resistência')) d *= 0.85;
+        d /= f.mult[E.stamina] * f.mult[E.stamina];
         d *= 1.15 - 0.3 * (p.treino / 100);
         if (f.pos === 'G') d *= 0.35;
         // A altitude cobra mais no segundo tempo.
@@ -274,7 +386,8 @@ export class MatchSim {
     const [H, A] = this.sides;
     const sh = this.sector(H);
     const sa = this.sector(A);
-    const mr = Math.pow(softRatio(sh.mid / Math.max(1, sa.mid)), 0.8);
+    const veloz = (s: SideState) => 1 + this.withStyle(s, 'mei_veloz').reduce((acc, f) => acc + this.styleP(s, f, 0.04), 0);
+    const mr = Math.pow(softRatio(sh.mid / Math.max(1, sa.mid)), 0.8) * (H.mods.posse * veloz(H)) / (A.mods.posse * veloz(A));
     const pHome = mr / (mr + 1);
     const attIdx: 0 | 1 = rng.next() < pHome ? 0 : 1;
     this.sides[attIdx].posse++;
@@ -283,41 +396,167 @@ export class MatchSim {
     const def = this.sides[1 - attIdx];
     const sAtt = attIdx === 0 ? sh : sa;
     const sDef = attIdx === 0 ? sa : sh;
-    let chanceP = CHANCE_BASE * Math.pow(softRatio(sAtt.att / Math.max(1, sDef.def)), 0.4);
+
+    // Criação: estilos que constroem jogadas aumentam a chance de ataque.
+    let criacao = 1;
+    const criadores: [EstiloId, number][] = [
+      ['mei_construtor', 0.06], ['vol_visionario', 0.04], ['zag_visionario', 0.03], ['ata_segundo', 0.03], ['ata_nato', 0.03], ['arm_abrecaminho', 0.03],
+    ];
+    for (const [st, b] of criadores) for (const f of this.withStyle(att, st)) criacao += this.styleP(att, f, b);
+    const pressao = 1 - 0.015 * Math.min(4, def.counts[E.press]) - 0.01 * Math.min(2, def.counts[E.gkout]);
+
+    let chanceP = CHANCE_BASE * Math.pow(softRatio(sAtt.att / Math.max(1, sDef.def)), 0.4) * att.mods.ataque * def.mods.defesa * criacao * pressao;
     // Time que perde no fim pressiona mais.
     const diff = att.goals - def.goals;
     if (this.half === 2 && this.minute >= 75 && diff < 0) chanceP *= 1.15;
     // Menos jogadores em campo = menos chances.
     chanceP *= att.onField.length / 11;
-    chanceP = clamp(chanceP, 0.03, 0.22);
+    chanceP = clamp(chanceP, 0.03, 0.25);
 
-    if (rng.next() < chanceP) this.chance(attIdx, att, def, sDef.gk);
+    if (rng.next() < chanceP) {
+      if (!this.intercepted(attIdx, def)) this.chance(attIdx, att, def, sDef.gk, false);
+    } else {
+      this.crossAttempt(attIdx, att, def, sDef.gk);
+    }
+    this.freeKick(attIdx, att, sDef.gk);
     for (let i = 0; i < 2; i++) this.discipline(i as 0 | 1);
     for (let i = 0; i < 2; i++) this.injuryCheck(i as 0 | 1);
   }
 
-  private chance(attIdx: 0 | 1, att: SideState, def: SideState, gkEff: number) {
+  /** Volante caçador e goleiro líbero podem matar o ataque antes da finalização. */
+  private intercepted(attIdx: 0 | 1, def: SideState): boolean {
+    const defIdx = (1 - attIdx) as 0 | 1;
+    for (const f of this.withStyle(def, 'vol_cacador')) {
+      if (this.rng.next() < this.styleP(def, f, 0.05)) {
+        if (this.rng.chance(0.4)) this.push(defIdx, 'estilo', `${f.p.name} (Caçador) rouba a bola no meio-campo.`, f.p.id);
+        return true;
+      }
+    }
+    for (const f of this.withStyle(def, 'libero')) {
+      if (this.rng.next() < this.styleP(def, f, 0.02)) {
+        if (this.rng.chance(0.4)) this.push(defIdx, 'estilo', `${f.p.name} (Líbero) sai da área e corta o lançamento.`, f.p.id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Lateral visionário chega ao fundo e cruza: chance de cabeça. */
+  private crossAttempt(attIdx: 0 | 1, att: SideState, def: SideState, gkEff: number) {
+    for (const f of this.withStyle(att, 'lat_visionario')) {
+      const p = this.styleP(att, f, 0.011) * att.mods.cruzamentos * f.mult[E.cross];
+      if (this.rng.next() < p) {
+        if (this.rng.chance(0.5)) this.push(attIdx, 'estilo', `${f.p.name} (Visionário) chega ao fundo e cruza na área!`, f.p.id);
+        this.chance(attIdx, att, def, gkEff, true, f);
+        return;
+      }
+    }
+  }
+
+  /** Cobradores de falta (habilidade) podem marcar de bola parada. */
+  private freeKick(attIdx: 0 | 1, att: SideState, gkEff: number) {
+    for (const f of att.onField) {
+      const fk = f.mult[E.fk];
+      if (fk <= 1 || this.rng.next() >= 0.06 * (fk - 1)) continue;
+      att.shots++;
+      const q = this.eff(att, f);
+      const pGoal = clamp(0.22 * Math.pow(softRatio(q / Math.max(1, gkEff)), 0.4), 0.05, 0.4);
+      if (this.rng.next() < pGoal) {
+        att.goals++;
+        att.onTarget++;
+        this.scorers.push({ side: attIdx, playerId: f.p.id, minute: this.minute });
+        this.push(attIdx, 'gol', `GOLAÇO DE FALTA do ${att.ctx.club.short}! ${f.p.name}`, f.p.id);
+      } else {
+        this.push(attIdx, 'chance', `${f.p.name} cobra falta com perigo!`, f.p.id);
+      }
+      return;
+    }
+  }
+
+  private chance(attIdx: 0 | 1, att: SideState, def: SideState, gkEff: number, header: boolean, crosser?: OnField) {
     const rng = this.rng;
+    const defIdx = (1 - attIdx) as 0 | 1;
+
+    // Barreiras: zagueiros e laterais podem travar o lance; o armador "abre caminho" dribla.
+    const blockers = [...this.withStyle(def, 'zag_barreira').map((f) => [f, 0.06] as const), ...this.withStyle(def, 'lat_barreira').map((f) => [f, header ? 0.06 : 0.035] as const)];
+    for (const [f, b] of blockers) {
+      if (rng.next() < this.styleP(def, f, b)) {
+        const dribbler = this.withStyle(att, 'arm_abrecaminho').find((d) => rng.next() < this.styleP(att, d, 0.3));
+        if (dribbler) {
+          if (rng.chance(0.5)) this.push(attIdx, 'estilo', `${dribbler.p.name} (Abre caminho) dribla ${f.p.name} e segue!`, dribbler.p.id);
+          break;
+        }
+        if (rng.chance(0.45)) this.push(defIdx, 'estilo', `${f.p.name} (Barreira) trava a jogada!`, f.p.id);
+        return;
+      }
+    }
+
+    // Quem finaliza.
     const weights: Record<Pos, number> = { ATA: 5, MEI: 3, LD: 1, LE: 1, VOL: 1, ZG: 0.6, G: 0 };
-    const shooter = rng.weighted(att.onField, (f) => weights[f.pos] * (0.5 + f.p.force / 100));
+    const pool = crosser ? att.onField.filter((f) => f !== crosser) : att.onField;
+    let shooter = rng.weighted(pool, (f) => {
+      let w = weights[f.pos] * (0.5 + f.p.force / 100);
+      if (f.p.style === 'ata_nato') w *= 1.5;
+      if (header) w *= f.mult[E.head] * (f.p.style === 'ata_pivo' ? 1.6 : 1) * (f.pos === 'ZG' ? 2 : 1);
+      return w;
+    });
     if (!shooter) return;
-    let q = this.eff(att, shooter);
-    const t = shooter.p.traits;
-    if (t.includes('Finalização') || t.includes('Oportunismo')) q *= 1.08;
-    if (t.includes('Cabeceio')) q *= 1.04;
-    let pGoal = GOAL_BASE * Math.pow(softRatio(q / Math.max(1, gkEff)), 0.4);
+    let assist: OnField | undefined = crosser;
+    let bonus = 1;
+
+    // Pivô segura e passa para quem chega melhor.
+    if (!header && shooter.p.style === 'ata_pivo' && rng.next() < this.styleP(att, shooter, 0.3)) {
+      const other = att.onField.filter((f) => f !== shooter && (f.pos === 'MEI' || f.pos === 'ATA'));
+      if (other.length) {
+        assist = shooter;
+        shooter = rng.pick(other);
+        bonus *= 1.12;
+        if (rng.chance(0.4)) this.push(attIdx, 'estilo', `${assist.p.name} (Pivô) segura e rola para ${shooter.p.name}.`, assist.p.id);
+      }
+    }
+    // Armador "Na medida": assistência perfeita.
+    if (!assist) {
+      const passer = this.withStyle(att, 'arm_namedida').find((f) => f !== shooter && rng.next() < this.styleP(att, f, 0.22));
+      if (passer) {
+        assist = passer;
+        bonus *= 1.15;
+      } else {
+        const other = att.onField.find((f) => f !== shooter && f.mult[E.assist] > 1 && rng.chance(0.15));
+        if (other) {
+          assist = other;
+          bonus *= 1.08;
+        }
+      }
+    }
+
+    let q = this.eff(att, shooter) * shooter.mult[E.shot] * (header ? shooter.mult[E.head] : 1);
+    if (shooter.p.style === 'ata_nato') q *= 1 + 0.03 * starFactor(shooter.p.stars);
+    const gkF = def.onField.find((f) => f.pos === 'G');
+    let gk = gkEff;
+    if (gkF) {
+      if (header) gk *= gkF.mult[E.gkair];
+      if (gkF.p.style === 'paredao') gk *= 1 + 0.03 * starFactor(gkF.p.stars);
+    }
+    let pGoal = GOAL_BASE * Math.pow(softRatio(q / Math.max(1, gk)), 0.4) * att.mods.conversao * bonus;
     if (this.ctx.weather.clima === 'chuva') pGoal = 0.75 * pGoal + 0.25 * GOAL_BASE + 0.01; // bola molhada: mais imprevisível
     pGoal = clamp(pGoal, 0.05, 0.6);
     att.shots++;
     if (rng.next() < pGoal) {
       att.goals++;
       att.onTarget++;
-      this.scorers.push({ side: attIdx, playerId: shooter.p.id, minute: this.minute });
-      this.push(attIdx, 'gol', `GOL do ${att.ctx.club.short}! ${shooter.p.name}`, shooter.p.id);
+      // Sem assistência de estilo, a maioria dos gols ainda tem um passe final.
+      if (!assist && rng.chance(0.55)) {
+        const others = att.onField.filter((f) => f !== shooter && f.pos !== 'G');
+        if (others.length) assist = rng.weighted(others, (f) => (f.pos === 'MEI' ? 3 : f.pos === 'ATA' ? 2 : 1) * f.mult[E.assist]);
+      }
+      this.scorers.push({ side: attIdx, playerId: shooter.p.id, minute: this.minute, assistId: assist?.p.id });
+      const como = header ? ' de cabeça' : '';
+      const ast = assist ? ` (assistência de ${assist.p.name})` : '';
+      this.push(attIdx, 'gol', `GOL do ${att.ctx.club.short}! ${shooter.p.name}${como}${ast}`, shooter.p.id);
     } else if (rng.chance(0.45)) {
       att.onTarget++;
-      const gk = def.onField.find((f) => f.pos === 'G');
-      this.push(attIdx, 'defesa', `${shooter.p.name} finaliza e ${gk ? gk.p.name : 'a defesa'} salva!`, shooter.p.id);
+      const keeper = gkF ? `${gkF.p.name}${gkF.p.style === 'paredao' ? ' (Paredão)' : ''}` : 'a defesa';
+      this.push(attIdx, 'defesa', `${shooter.p.name} finaliza${header ? ' de cabeça' : ''} e ${keeper} salva!`, shooter.p.id);
     } else if (rng.chance(0.3)) {
       this.push(attIdx, 'chance', `${shooter.p.name} arrisca e manda para fora.`, shooter.p.id);
     }
@@ -328,11 +567,12 @@ export class MatchSim {
     const side = this.sides[idx];
     if (!side.onField.length) return;
     const temperamentais = side.onField.filter((f) => f.p.personality === 'temperamental').length / side.onField.length;
-    let pFoul = 0.021 * (1 + 0.5 * temperamentais);
+    let pFoul = 0.021 * (1 + 0.5 * temperamentais) * side.mods.cartoes;
     if (this.ctx.weather.clima === 'chuva') pFoul *= 1.15;
     if (rng.next() < pFoul) {
       const f = rng.weighted(side.onField, (x) =>
-        (x.p.personality === 'temperamental' ? 2 : 1) * (setorOf(x.pos) === 'DEF' || x.pos === 'VOL' ? 1.4 : 1) * (x.pos === 'G' ? 0.2 : 1));
+        (x.p.personality === 'temperamental' ? 2 : 1) * (setorOf(x.pos) === 'DEF' || x.pos === 'VOL' ? 1.4 : 1) * (x.pos === 'G' ? 0.2 : 1)
+        * (x.p.style === 'vol_cacador' ? 1.3 : 1) / x.mult[E.card] / x.mult[E.card]);
       f.yellow++;
       side.yellows.set(f.p.id, f.yellow);
       if (f.yellow >= 2) {
@@ -351,6 +591,7 @@ export class MatchSim {
 
   private sendOff(side: SideState, f: OnField) {
     side.onField = side.onField.filter((x) => x !== f);
+    side.cacheKey = -1;
     side.sentOff.add(f.p.id);
     side.out.add(f.p.id);
     f.p.suspendedGames += f.yellow >= 3 ? 2 : 1;
@@ -362,6 +603,7 @@ export class MatchSim {
     let p = 0.0011;
     if (this.ctx.weather.clima === 'frio') p *= 1.3;
     if (this.ctx.weather.clima === 'calor') p *= 1.1;
+    p *= side.mods.desgaste;
     if (rng.next() >= p) return;
     const candidates = side.onField.filter((f) => !f.injured);
     if (!candidates.length) return;
@@ -379,6 +621,8 @@ export class MatchSim {
     let r = 0.35 * ((p.oportunidade - 50) / 50) + 0.35 * ((p.treino - 50) / 50) + 0.3 * ((p.respeito - 50) / 50);
     if (side.ctx.eager?.has(p.id)) r += p.respeito >= 45 ? 0.2 : -0.15;
     if (p.respeito < 35) r -= 0.2;
+    // Estilo que combina com a tática entra mais encaixado.
+    if (side.favored.has(p.style)) r += 0.08;
     // Técnico inexperiente: efeito menos previsível.
     const sd = 0.25 * (1.2 - side.ctx.coachExperience / 100);
     r += this.rng.normal(0, sd);
@@ -396,17 +640,18 @@ export class MatchSim {
     if (side.out.has(inId)) return { ok: false, error: 'Esse jogador já saiu do jogo.' };
 
     const mod = this.substitutionImpact(side, inP);
-    side.onField = side.onField.map((f) => (f === out ? { p: inP, pos: out.pos, mod, injured: false, yellow: 0, enteredAt: this.minute } : f));
+    side.onField = side.onField.map((f) => (f === out ? { p: inP, pos: out.pos, mod, injured: false, yellow: 0, enteredAt: this.minute, ab: abilityRefs(inP), mult: new Float64Array(EFEITOS.length).fill(1) } : f));
     side.bench = side.bench.filter((p) => p.id !== inId);
     side.out.add(outId);
     side.subsUsed++;
+    side.cacheKey = -1;
     side.played.add(inId);
     side.subImpact.set(inId, mod);
 
     let how = 'entra no lugar de';
     if (mod > 0.35) how = 'entra com tudo no lugar de';
     else if (mod < -0.3) how = 'entra desligado no lugar de';
-    this.push(idx, 'sub', `${side.ctx.club.short}: ${inP.name} ${how} ${out.p.name}.`, inId);
+    this.push(idx, 'sub', `${side.ctx.club.short}: ${inP.name} (${ESTILOS[inP.style].curto}) ${how} ${out.p.name}.`, inId);
     if (mod < -0.3 && side.ctx.isUser) {
       this.push(idx, 'info', `${inP.name} parece sem ritmo e sem confiança — pode atrapalhar.`, inId);
     }
@@ -450,7 +695,8 @@ export class MatchSim {
   private penaltyShootout() {
     const rng = this.rng;
     const takers = this.sides.map((s) =>
-      [...s.onField].filter((f) => f.pos !== 'G').sort((a, b) => b.p.force - a.p.force).concat(s.onField.filter((f) => f.pos === 'G')));
+      [...s.onField].filter((f) => f.pos !== 'G').sort((a, b) => b.p.force * b.mult[E.penk] - a.p.force * a.mult[E.penk])
+        .concat(s.onField.filter((f) => f.pos === 'G')));
     const keepers = this.sides.map((s) => s.onField.find((f) => f.pos === 'G'));
     const score: [number, number] = [0, 0];
     this.push(-1, 'penaltis', 'Empate no agregado: decisão por pênaltis!');
@@ -459,8 +705,10 @@ export class MatchSim {
       if (!list.length) return;
       const t = list[n % list.length];
       const gk = keepers[1 - i];
-      const q = this.eff(this.sides[i], t) * (t.p.traits.includes('Finalização') ? 1.05 : 1);
-      const g = gk ? this.eff(this.sides[1 - i], gk) * (gk.p.traits.includes('Pênaltis') ? 1.12 : 1) : q * 0.5;
+      const side = this.sides[i];
+      const other = this.sides[1 - i];
+      const q = this.eff(side, t) * Math.pow(t.mult[E.penk], 2) * t.mult[E.shot];
+      const g = gk ? this.eff(other, gk) * Math.pow(gk.mult[E.pen], 3) : q * 0.5;
       const p = clamp(0.76 + 0.12 * ((q - g) / (q + g)), 0.55, 0.92);
       const ok = rng.next() < p;
       if (ok) score[i]++;

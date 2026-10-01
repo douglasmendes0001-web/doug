@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { resolveOffer } from '../../engine/clubOps';
-import { respondMessage, unreadCount } from '../../engine/inbox';
+import { handleMessageAction } from '../../engine/actions';
+import { unreadCount } from '../../engine/inbox';
 import { Rng } from '../../engine/rng';
 import type { CanalMensagem } from '../../engine/types';
 import { useLoadedGame } from '../game';
@@ -18,15 +18,12 @@ export function Inbox() {
   const [canal, setCanal] = useState<CanalMensagem>('diretoria');
   const msgs = state.messages.filter((m) => m.channel === canal);
 
-  const act = (msgId: number, kind: string | undefined, actionId: string) => {
+  const act = (msgId: number, actionId: string) => {
     let feedback = '';
     update((s) => {
-      if (kind === 'proposta') feedback = resolveOffer(s, msgId, actionId === 'aceitar');
-      else {
-        const rng = new Rng(s.rng);
-        feedback = respondMessage(s, rng, msgId, actionId);
-        s.rng = rng.state;
-      }
+      const rng = new Rng(s.rng);
+      feedback = handleMessageAction(s, rng, msgId, actionId);
+      s.rng = rng.state;
     });
     if (feedback) toast(feedback);
   };
@@ -56,7 +53,7 @@ export function Inbox() {
           {m.actions && !m.resolved && (
             <div className="msg-actions">
               {m.actions.map((a) => (
-                <button key={a.id} className="btn small" onClick={(e) => { e.stopPropagation(); act(m.id, m.kind, a.id); }}>{a.label}</button>
+                <button key={a.id} className="btn small" onClick={(e) => { e.stopPropagation(); act(m.id, a.id); }}>{a.label}</button>
               ))}
             </div>
           )}

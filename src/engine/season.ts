@@ -2,10 +2,10 @@
 // calendário dia a dia e virada de temporada.
 
 import { createCoach, initialRespeito, type CoachInput } from './coach';
-import { scheduleSeason, slotIsWeekend, slotMonth } from './calendar';
-import { clubEco, homeGate, logFinance, weeklyFinance, weeklyOffers } from './clubOps';
+import { scheduleSeason, slotIsWeekend, slotMonth, slotWeek } from './calendar';
+import { clubEco, homeGate, logFinance, weeklyFinance } from './clubOps';
 import {
-  advanceCompetition, knockoutContext, recordResult, startStage,
+  advanceCompetition, knockoutContext, pendingByStage, recordResult, startStage,
 } from './competitions';
 import { endSeason } from './endSeason';
 import { afterUserMatchMessages, confidenceMessages, pushMessage, seasonStartMessages, weeklyPlayerRequests } from './inbox';
@@ -13,12 +13,16 @@ import { autoLineup, repairLineup } from './lineup';
 import { MatchSim, type MatchContext, type TeamContext } from './match';
 import { Rng, clamp } from './rng';
 import { buildSeasonCompetitions } from './seasonSetup';
+import { initialSponsors, investorOffer, titleBonus, weeklySponsorIncome } from './sponsors';
+import { contractReminders, weeklyOffers } from './transfers';
+import { weeklyYouthTraining, youthIntake } from './youth';
+import type { TaticaId } from './data/estilos';
 import type { Club, Fixture, Formacao, GameState, Player, Settings } from './types';
 import { SLOTS_PER_YEAR } from './types';
 import { generateWeather } from './weather';
 import { createWorld } from './world';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const START_YEAR = 2026;
 
 export interface NewGameOptions {
@@ -43,14 +47,17 @@ export function newGame(opts: NewGameOptions, world = createWorld(opts.seed)): G
     competitions: [],
     fixtures: [],
     messages: [],
-    lineup: { formation: '4-4-2', starters: [], bench: [] },
+    lineup: { formation: '4-4-2', tactic: 'equilibrado', starters: [], bench: [] },
     treino: 'normal',
     settings: opts.settings,
     history: [],
     nextIds: { player: world.players.length, fixture: 0, message: 0, tie: 0 },
     financeLog: [],
     mundialEdition: 0,
+    sponsors: { master: null, base: [] },
   };
+  const rng = new Rng(state.rng ^ 0x2545f491);
+  initialSponsors(state, rng);
   for (const id of state.clubs[opts.clubId].playerIds) {
     state.players[id].respeito = initialRespeito(coach, state.players[id]);
   }
@@ -74,6 +81,8 @@ export function startSeason(state: GameState) {
   for (const c of comps) startStage(state, c, 0, c.teams, rng);
   setObjective(state);
   seasonStartMessages(state);
+  youthIntake(state, rng);
+  investorOffer(state, rng, state.lastPerformance ?? 0);
   state.rng = rng.state;
 }
 
@@ -123,11 +132,16 @@ export function compOf(state: GameState, fx: Fixture) {
 
 const FORMACOES_IA: Formacao[] = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '4-5-1'];
 
+const TATICAS_FORTES: TaticaId[] = ['posse', 'pressao', 'tiki', 'gegen', 'total', 'pontas', 'equilibrado'];
+const TATICAS_FRACAS: TaticaId[] = ['retranca', 'contra', 'catenaccio', 'ligacao', 'aereo', 'equilibrado', 'contra'];
+
 function aiTeam(state: GameState, club: Club): TeamContext {
   const squad = squadOf(state, club.id);
   const formation = FORMACOES_IA[club.id % FORMACOES_IA.length];
+  const list = club.reputation >= 60 ? TATICAS_FORTES : TATICAS_FRACAS;
+  const tactic = list[(club.id * 7) % list.length];
   return {
-    club, squad, lineup: autoLineup(squad, formation), coachExperience: clamp(35 + club.reputation * 0.45, 20, 90), isUser: false,
+    club, squad, lineup: autoLineup(squad, formation, new Set(), tactic), coachExperience: clamp(35 + club.reputation * 0.45, 20, 90), isUser: false,
   };
 }
 
@@ -172,6 +186,7 @@ export function prepareMatch(state: GameState, fx: Fixture, rng: Rng): PreparedM
       home: isUserHome ? userTeam(state) : aiTeam(state, home),
       away: isUserAway ? userTeam(state) : aiTeam(state, away),
       venue, neutral: fx.neutral, weather, crowd, rng, knockout: knockoutContext(state, fx),
+      bigGame: fx.tieId !== undefined || comp.def.kind === 'continental' || comp.def.kind === 'mundial',
     },
     attendance,
     revenue,
@@ -194,7 +209,7 @@ export function applyMatchOutcome(state: GameState, fx: Fixture, sim: MatchSim, 
   fx.played = true;
   fx.weather = sim.ctx.weather.clima;
   fx.temperature = sim.ctx.weather.temperature;
-  fx.scorers = sim.scorers.map((s) => ({ clubId: s.side === 0 ? fx.home : fx.away, playerId: s.playerId, minute: s.minute }));
+  fx.scorers = sim.scorers.map((s) => ({ clubId: s.side === 0 ? fx.home : fx.away, playerId: s.playerId, minute: s.minute, assistId: s.assistId }));
   recordResult(state, fx);
 
   sim.sides.forEach((side) => {
@@ -225,7 +240,10 @@ export function applyMatchOutcome(state: GameState, fx: Fixture, sim: MatchSim, 
       }
     }
   });
-  for (const s of sim.scorers) state.players[s.playerId].seasonGoals++;
+  for (const s of sim.scorers) {
+    state.players[s.playerId].seasonGoals++;
+    if (s.assistId !== undefined) state.players[s.assistId].seasonAssists++;
+  }
 
   const userSide = fx.home === state.userClubId ? 0 : fx.away === state.userClubId ? 1 : -1;
   if (userSide >= 0) afterUserMatch(state, fx, sim, userSide as 0 | 1, rng, prepared);
@@ -359,8 +377,9 @@ export function playSlot(state: GameState): SlotReport {
     if (!fx.played) simulateFixture(state, fx, rng);
   }
   const finishedComps: string[] = [];
+  const pending = pendingByStage(state);
   for (const comp of state.competitions) {
-    if (advanceCompetition(state, comp, rng)) {
+    if (advanceCompetition(state, comp, rng, pending)) {
       finishedComps.push(comp.def.id);
       onCompetitionFinished(state, comp.def.id);
     }
@@ -368,6 +387,10 @@ export function playSlot(state: GameState): SlotReport {
   dailyRecovery(state);
   if (slotIsWeekend(slot)) {
     weeklyFinance(state);
+    weeklySponsorIncome(state);
+    weeklyYouthTraining(state);
+    if (slotWeek(slot) === 40) contractReminders(state);
+    if (slotWeek(slot) === 26) youthIntake(state, rng);
     weeklyPlayerRequests(state, rng);
     weeklyOffers(state, rng);
     weeklyTraining(state);
@@ -393,6 +416,7 @@ function onCompetitionFinished(state: GameState, compId: string) {
     state.coach.confTorcida = clamp(state.coach.confTorcida + 25, 0, 100);
     state.coach.experience = clamp(state.coach.experience + 3, 0, 100);
     logFinance(state, `Premiação: campeão da ${comp.def.name}`, Math.round(comp.def.prize * Math.max(0.2, clubEco(state.clubs[u]))));
+    titleBonus(state, comp.def.name);
     for (const id of state.clubs[u].playerIds) state.players[id].respeito = clamp(state.players[id].respeito + 10, 0, 100);
     pushMessage(state, 'torcida', 'É CAMPEÃO!', `${comp.def.name} ${state.year} é nossa! Obrigado, ${state.coach.name}! A festa vai varar a madrugada!`);
     pushMessage(state, 'midia', 'Título', `${state.clubs[u].name} conquista a ${comp.def.name}. ${state.coach.name} entra para a história do clube.`);

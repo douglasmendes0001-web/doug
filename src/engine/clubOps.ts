@@ -1,11 +1,10 @@
 // Administração do clube: finanças, estádio, CT, ingressos e mercado.
 
-import { initialRespeito } from './coach';
 import { leagueById } from './data/ligas';
 import { formatMoney, pushMessage } from './inbox';
 import { roundMoney } from './players';
-import { clamp, type Rng } from './rng';
-import type { Club, GameState, Player } from './types';
+import { clamp } from './rng';
+import type { Club, GameState } from './types';
 
 export function clubEco(club: Club): number {
   if (club.leagueId) return leagueById(club.leagueId).eco;
@@ -95,97 +94,4 @@ export function upgradeCT(state: GameState): string {
 
 export function setTicketPrice(state: GameState, price: number) {
   state.clubs[state.userClubId].ticketPrice = clamp(Math.round(price), 5, 2000);
-}
-
-// ---------------- Mercado ----------------
-
-export function askingPrice(p: Player): number {
-  return roundMoney(p.value * (p.forSale ? 0.95 : 1.25));
-}
-
-export function searchMarket(state: GameState, filters: { pos?: string; maxPrice?: number; minForce?: number; country?: string }): Player[] {
-  const out: Player[] = [];
-  for (const p of state.players) {
-    if (p.retired || p.clubId === state.userClubId) continue;
-    const club = state.clubs[p.clubId];
-    if (!club || club.tier === 0) continue;
-    if (filters.pos && p.pos !== filters.pos) continue;
-    if (filters.country && club.country !== filters.country) continue;
-    if (filters.minForce && p.force < filters.minForce) continue;
-    if (filters.maxPrice && askingPrice(p) > filters.maxPrice) continue;
-    out.push(p);
-  }
-  return out.sort((a, b) => b.force - a.force).slice(0, 60);
-}
-
-function movePlayer(state: GameState, p: Player, toClubId: number) {
-  const from = state.clubs[p.clubId];
-  from.playerIds = from.playerIds.filter((id) => id !== p.id);
-  state.clubs[toClubId].playerIds.push(p.id);
-  p.clubId = toClubId;
-  p.forSale = false;
-  p.promiseUntilSlot = undefined;
-  p.benchStreak = 0;
-}
-
-export function buyPlayer(state: GameState, playerId: number): string {
-  const p = state.players[playerId];
-  const club = state.clubs[state.userClubId];
-  const seller = state.clubs[p.clubId];
-  if (club.playerIds.length >= 36) return 'Elenco cheio (máximo 36 jogadores).';
-  if (seller.playerIds.length <= 18) return `O ${seller.name} não quer vender: elenco muito curto.`;
-  const price = askingPrice(p);
-  if (club.money < price) return `Dinheiro insuficiente: o ${seller.name} pede ${formatMoney(price)}.`;
-  logFinance(state, `Contratação de ${p.name}`, -price);
-  seller.money += price;
-  movePlayer(state, p, club.id);
-  p.respeito = initialRespeito(state.coach, p);
-  p.oportunidade = 50;
-  pushMessage(state, 'midia', 'Reforço!', `${club.name} anuncia ${p.name} (${p.pos}, ${p.age} anos), ex-${seller.name}, por ${formatMoney(price)}.`);
-  return `${p.name} contratado por ${formatMoney(price)}!`;
-}
-
-export function toggleForSale(state: GameState, playerId: number) {
-  const p = state.players[playerId];
-  if (p.clubId !== state.userClubId) return;
-  p.forSale = !p.forSale;
-}
-
-/** Propostas semanais por jogadores à venda (e, às vezes, pelos destaques). */
-export function weeklyOffers(state: GameState, rng: Rng) {
-  const club = state.clubs[state.userClubId];
-  for (const id of club.playerIds) {
-    const p = state.players[id];
-    const open = state.messages.some((m) => m.kind === 'proposta' && m.playerId === id && !m.resolved);
-    if (open) continue;
-    const chance = p.forSale ? 0.35 : p.force > club.baseForce * 1.15 ? 0.02 : 0;
-    if (!rng.chance(chance)) continue;
-    const buyers = state.clubs.filter((c) => c.id !== club.id && c.tier > 0 && c.tier < 9 && c.baseForce >= p.force * 0.85 && c.money > p.value * 0.6);
-    if (!buyers.length) continue;
-    const buyer = rng.pick(buyers);
-    const amount = roundMoney(p.value * rng.range(p.forSale ? 0.75 : 1.0, p.forSale ? 1.1 : 1.4));
-    pushMessage(state, 'diretoria', `Proposta por ${p.name}`,
-      `O ${buyer.name} oferece ${formatMoney(amount)} por ${p.name}. A decisão é sua, professor.`,
-      { playerId: p.id, kind: 'proposta', data: { amount, clubId: buyer.id }, actions: [{ id: 'aceitar', label: 'Aceitar' }, { id: 'recusar', label: 'Recusar' }] });
-  }
-}
-
-export function resolveOffer(state: GameState, msgId: number, accept: boolean): string {
-  const m = state.messages.find((x) => x.id === msgId);
-  if (!m || m.resolved || m.kind !== 'proposta' || m.playerId === undefined || !m.data) return '';
-  m.resolved = accept ? 'aceitar' : 'recusar';
-  m.read = true;
-  const p = state.players[m.playerId];
-  if (!accept) return 'Proposta recusada.';
-  if (p.clubId !== state.userClubId) return 'Esse jogador já não está no clube.';
-  const club = state.clubs[state.userClubId];
-  if (club.playerIds.length <= 16) return 'Venda bloqueada: o elenco ficaria curto demais.';
-  const buyer = state.clubs[m.data.clubId];
-  logFinance(state, `Venda de ${p.name}`, m.data.amount);
-  buyer.money -= m.data.amount;
-  movePlayer(state, p, buyer.id);
-  p.respeito = 65;
-  state.lineup.starters = state.lineup.starters.filter((id) => id !== p.id);
-  state.lineup.bench = state.lineup.bench.filter((id) => id !== p.id);
-  return `${p.name} vendido ao ${buyer.name} por ${formatMoney(m.data.amount)}.`;
 }

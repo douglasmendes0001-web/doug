@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ESTILOS_POR_POS } from '../src/engine/data/estilos';
 import { autoLineup } from '../src/engine/lineup';
 import { MatchSim, type TeamContext } from '../src/engine/match';
 import { SQUAD_TEMPLATE, createPlayer } from '../src/engine/players';
@@ -13,6 +14,9 @@ function makeClub(id: number, country: CountryCode, altitude: number, force: num
   const squad = SQUAD_TEMPLATE.map((pos, i) => {
     const p = createPlayer(rng, id * 100 + i, id, country, pos, force);
     p.force = force; // elencos idênticos em força
+    p.stars = 2;
+    p.abilities = [];
+    p.style = ESTILOS_POR_POS[pos][0];
     return p;
   });
   return { club, squad };

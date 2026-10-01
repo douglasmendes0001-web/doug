@@ -124,11 +124,100 @@ clube.
 - [2029 FIFA Club World Cup (beIN Sports)](https://www.beinsports.com/en-us/soccer/fifa-club-world-cup/articles/fifa-club-world-cup-to-increase-number-of-slots-for-2029-edition-2026-02-20)
 - [Super League Greece (Wikipedia)](https://en.wikipedia.org/wiki/Super_League_Greece) · [Süper Lig (Wikipedia)](https://en.wikipedia.org/wiki/S%C3%BCper_Lig) · [Scottish Premiership (Wikipedia)](https://en.wikipedia.org/wiki/Scottish_Premiership)
 
+## Estrelas, habilidades e estilos dos jogadores
+
+**Estrelas (1–7):**
+
+| Estrelas | Classe | Habilidades | Rendimento extra |
+|---|---|---|---|
+| 1–3 | jogadores normais | 4 | 0% a +1,5% |
+| 4–5 | desequilibram o jogo | 5 | +5% / +8% |
+| 6–7 | lendários | 6 | +12% / +17% |
+
+As estrelas também multiplicam a chance dos estilos dispararem (`0,6 + 0,2 × estrelas`) e o valor de
+mercado. Na geração do mundo, cerca de 88% dos jogadores têm 1 a 3 estrelas, 11% têm 4 ou 5 e menos de
+0,5% têm 6 ou 7. Jovens podem ganhar estrelas até o limite (`starCap`).
+
+**Habilidades:** o banco em `src/engine/data/habilidades.ts` tem **910 habilidades**, 130 por posição.
+São 26 habilidades-base por posição, cada uma combinada com condições como "sob pressão", "no fim do
+jogo", "em jogos grandes", "fora de casa", "na chuva", "na altitude" e outras. O arquivo é gerado por
+`scripts/gen_habilidades.py`. Cada habilidade tem um efeito no motor (defesa do goleiro, desarme, passe,
+finalização, cruzamento, cabeceio, falta, pênalti, fôlego, liderança, disciplina etc.). Habilidade fixa
+dá +3%; condicional dá +6%, mas só quando a condição está ativa.
+
+**Estilos de jogo** (cada jogador tem um; as probabilidades são por minuto e crescem com as estrelas):
+
+| Posição | Estilo | O que faz no motor |
+|---|---|---|
+| Goleiro | Paredão / Líbero | mais defesas difíceis / corta lançamentos antes da chance |
+| Zagueiro | Visionário / Barreira | passe que cria jogada / trava a finalização |
+| Lateral | Visionário / Barreira | chega ao fundo e cruza (chance de cabeça) / defende as jogadas pelo lado |
+| Volante | Caçador / Visionário | rouba a bola no meio e mata o ataque / passe vertical que inicia o ataque |
+| Meia de ligação | Construtor / Veloz | constrói jogadas / está em todo o meio (mais posse) |
+| Armador | Na medida / Abre caminho | assistência perfeita (gol mais provável) / dribla a barreira que travaria o lance |
+| Atacante | Segundo atacante / Pivô / Nato | volta para armar / segura e rola para quem chega / finaliza e converte mais |
+
+## Táticas do técnico (12)
+
+Equilibrado, Posse de bola, Tiki-taka, Contra-ataque, Pressão alta, Gegenpressing, Retranca, Catenaccio,
+Jogo aéreo, Jogo pelas pontas, Ligação direta e Futebol total. Cada tática:
+
+- muda a posse, as chances criadas e as sofridas, o desgaste, os cartões, os cruzamentos e a conversão;
+- **favorece estilos de jogadores**: um estilo favorecido dispara até 35% mais. A tela mostra o
+  "encaixe" do time titular;
+- tem **complexidade**: a execução é `1 − max(0, complexidade − exp/100 − 0,15) × 1,2` (mín. 40%). Um
+  técnico novato usando Tiki-taka executa só 40%, perde os bônus e ainda sofre penalidade de rendimento.
+
+## Patrocínios
+
+- **Master:** valor semanal pelo tamanho da marca (1–5) e pela economia da liga.
+- **Base:** até 3 marcas pequenas. Esse dinheiro também conta como investimento nas categorias de base.
+- **Revisão anual por desempenho.** A nota soma: objetivo cumprido (+1/−1), títulos (+1 cada), acesso
+  (+1), rebaixamento (−2) e humor da torcida (±1).
+  - ≥ 2 (excelente ou brilhante): uma marca maior oferece contrato com cláusula de desempenho, e a atual
+    faz **contraproposta com argumentos** (tempo de parceria, venda de camisas, histórico da
+    concorrente, bônus por título). O usuário escolhe entre a nova, a contraproposta ou manter.
+  - −1: a marca pede **ajuste** de −25% (aceitar ou deixar sair).
+  - ≤ −2: a marca **sai** e entra uma menor.
+  - Cláusula de desempenho: a marca nova corta 30% após uma temporada ruim.
+
+## Categorias de base, investidores e joias lendárias
+
+- Garotos de **15 a 20 anos**, com duas safras por ano (janeiro e julho) e 2 a 4 garotos conforme o
+  nível da base. Evoluem toda semana pelo CT, pelo nível da base, pelo investimento e pelo treino.
+  Aos 21 anos sobem automaticamente ou são dispensados.
+- **Investimento na temporada** = patrocínios da base + investidores + aportes do clube. Metade se
+  perde na virada do ano.
+- **Investidores:** no início da temporada, grupos oferecem dinheiro para o CT ou para a base em troca
+  de 5–15% das vendas de jogadores por 3 temporadas.
+- **Joia lendária:** a chance por garoto é `0,2% + 0,3% × nível da base + 0,15% × CT + 3% × investimento`
+  (até ~5,5%). A joia chega com 15 anos, força 61–88 e **1 a 5 estrelas** (mais investimento puxa para
+  mais estrelas), com potencial para 6 ou 7 estrelas e evolução acelerada.
+
+## Mercado: janelas, contratos e empréstimos
+
+- **Janelas:** Europa nas semanas 0–4 (janeiro) e 26–34 (julho–agosto); América do Sul nas semanas 0–9
+  e 27–32. Para negociar, a janela do comprador e a do vendedor precisam estar abertas. Propostas de
+  clubes europeus só chegam na janela europeia, e com valor maior.
+- **Agentes livres** podem assinar a qualquer momento.
+- **Contratos** de 1 a 5 anos, com salário pedido pelo jogador (valor + estrelas). Na semana 40 chegam
+  os avisos de contratos que vencem: renovar por 2 ou 4 anos, ou deixar sair. Quem tem respeito < 20 não
+  quer renovar, mas dá para tentar convencer. Sem renovação, o jogador sai de graça. Na IA, 85% renovam.
+- **Empréstimos** até o fim do ano: pegar reservas de outros clubes (taxa de 8% do valor) ou mandar um
+  jogador para ganhar ritmo. Na virada do ano todos voltam.
+
+## Previsão (Monte Carlo)
+
+Na tela de Tabelas, o botão "Simular 400x" roda o restante da competição com um modelo de gols de
+Poisson baseado na força dos elencos (top 11 × estrelas). Mostra:
+
+- na **Libertadores** e nas copas: a chance de título e de passar de fase de cada clube;
+- nas ligas: a chance de título, de vaga na Libertadores ou Champions e de rebaixamento.
+
 ## Simplificações conhecidas (próximas fases)
 
 - Temporada de janeiro a dezembro para todos (a Europa real vai de agosto a maio).
 - Sem fases prévias na Libertadores/Sul-Americana e sem vaga de copa nacional na Europa.
 - Promedio (ARG/COL) substituído pela soma de pontos do ano; playoffs de acesso viram vagas diretas.
-- Mercado simples: compra pelo preço pedido e venda por propostas. Ainda não há contratos, empréstimos
-  nem negociação de salário.
+- Ainda não há negociação de valores (contraproposta do usuário) nem cláusulas de rescisão.
 - Sem escudos nem nomes de jogadores reais: os jogadores são fictícios e os clubes europeus, genéricos.

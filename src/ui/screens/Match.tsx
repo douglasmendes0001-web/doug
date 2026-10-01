@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ESTILOS, execucaoTatica, taticaById } from '../../engine/data/estilos';
 import { MAX_SUBS } from '../../engine/lineup';
 import { MatchSim, type MatchEvent } from '../../engine/match';
 import { Rng } from '../../engine/rng';
@@ -109,7 +110,8 @@ export function MatchScreen({ fixture, onDone, onBack }: Props) {
           {prepared.ctx.weather.clima === 'chuva' && <div className="warning small" style={{ marginTop: 6 }}>Chuva: gramado pesado, jogo mais imprevisível e mais faltas.</div>}
         </div>
         <div className="panel">
-          <h2>Seu time ({state.lineup.formation})</h2>
+          <h2>Seu time ({state.lineup.formation} · {taticaById(state.lineup.tactic).nome})</h2>
+          <div className="small">Execução da tática: <b>{Math.round(execucaoTatica(taticaById(state.lineup.tactic), state.coach.experience) * 100)}%</b></div>
           <div className="small">Força média dos titulares: <b>{avg.toFixed(1)}</b></div>
           {tired.length > 0 && <div className="small" style={{ color: '#ff8a80' }}>Cansados: {tired.map((p) => `${p.name} (${Math.round(p.energy)}%)`).join(', ')}</div>}
           {veteranosInsatisfeitos.length > 0 && <div className="small gold">Pouco comprometidos com você: {veteranosInsatisfeitos.map((p) => p.name).join(', ')}</div>}
@@ -166,7 +168,7 @@ export function MatchScreen({ fixture, onDone, onBack }: Props) {
                   if (!res.ok) setSubError(res.error ?? '');
                   else { setSubOut(null); setShowSubs(false); setTick((t) => t + 1); }
                 }}>
-                  <b style={{ width: 36 }}>{p.pos}</b><span className="grow">{p.name}</span>
+                  <b style={{ width: 36 }}>{p.pos}</b><span className="grow">{p.name} <span className="stars">{'★'.repeat(p.stars)}</span> <span className="style-tag">{ESTILOS[p.style].curto}</span></span>
                   <span className={`resp ${r.cls}`}>{r.label}</span><b>{Math.round(p.force)}</b>
                 </button>
               );

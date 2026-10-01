@@ -1,5 +1,6 @@
 // Formações, adequação de posição e escalação automática.
 
+import type { TaticaId } from './data/estilos';
 import type { Formacao, Lineup, Player, Pos } from './types';
 
 export const FORMACOES: Record<Formacao, Record<Pos, number>> = {
@@ -43,7 +44,7 @@ function selectionScore(p: Player): number {
  * Escala o melhor time possível para a formação, preenchendo cada posição
  * com o melhor jogador disponível (aceitando improvisação quando falta gente).
  */
-export function autoLineup(squad: Player[], formation: Formacao, exclude: Set<number> = new Set()): Lineup {
+export function autoLineup(squad: Player[], formation: Formacao, exclude: Set<number> = new Set(), tactic: TaticaId = 'equilibrado'): Lineup {
   const pool = squad.filter((p) => available(p) && !exclude.has(p.id));
   const used = new Set<number>();
   const starters: number[] = [];
@@ -73,7 +74,7 @@ export function autoLineup(squad: Player[], formation: Formacao, exclude: Set<nu
   // Garante um goleiro reserva no banco.
   const gk = bench.find((p) => p.pos === 'G');
   const benchIds = gk ? [gk.id, ...bench.filter((p) => p.id !== gk.id).map((p) => p.id)] : bench.map((p) => p.id);
-  return { formation, starters, bench: benchIds.slice(0, BENCH_SIZE) };
+  return { formation, tactic, starters, bench: benchIds.slice(0, BENCH_SIZE) };
 }
 
 /**
@@ -161,5 +162,5 @@ export function repairLineup(lineup: Lineup, squad: Player[]): { lineup: Lineup;
       if (available(p) && !starters.includes(p.id) && !benchFinal.includes(p.id)) benchFinal.push(p.id);
     }
   }
-  return { lineup: { formation: lineup.formation, starters, bench: benchFinal.slice(0, BENCH_SIZE) }, changed };
+  return { lineup: { formation: lineup.formation, tactic: lineup.tactic ?? 'equilibrado', starters, bench: benchFinal.slice(0, BENCH_SIZE) }, changed };
 }

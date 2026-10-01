@@ -135,6 +135,8 @@ export type CarreiraJogador = 'umClube' | 'variosClubes';
 export interface Coach {
   name: string;
   age: number;
+  /** Nacionalidade (compatriotas confiam um pouco mais). */
+  nat?: CountryCode;
   exPlayer: boolean;
   career: CarreiraJogador | null;
   titulosCarreira: boolean;
@@ -353,6 +355,8 @@ export interface GameState {
   /** Classificados para torneios continentais da próxima temporada. */
   qualifications?: Record<string, number[]>;
   financeLog: FinanceEntry[];
+  /** Slot de salvamento (1 a 3). */
+  saveSlot?: number;
   /** Nota de desempenho da última temporada (patrocínios e investidores). */
   lastPerformance?: number;
   /** Patrocinadores do clube do usuário. */

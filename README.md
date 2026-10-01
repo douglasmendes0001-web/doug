@@ -52,6 +52,8 @@ src/engine/
   youth.ts       categorias de base (15-20 anos) e joias lendárias
   forecast.ts    previsão Monte Carlo (Libertadores, copas e ligas)
   actions.ts     respostas às mensagens (propostas, patrocínio, contratos...)
+  editor.ts      modo editor (edição de clubes e jogadores do banco de dados)
+  save.ts        3 slots de carreira + banco do editor no IndexedDB
 src/ui/          telas no estilo Brasfoot
 tests/           testes do motor
 scripts/         gerador do banco de habilidades

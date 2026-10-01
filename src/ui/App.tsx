@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { jobOffers, takeJob } from '../engine/endSeason';
 import { unreadCount } from '../engine/inbox';
-import { loadGame } from '../engine/save';
+import { listSaves, loadGame, type SaveSummary } from '../engine/save';
 import { advanceToNextUserMatch, userFixtureAtSlot, type SlotReport } from '../engine/season';
 import type { Fixture, GameState } from '../engine/types';
+import { Editor } from './screens/Editor';
+import { LoadGame } from './screens/LoadGame';
 import { Header } from './components/Header';
 import { IconBall, IconCalendar, IconGear, IconMail, IconShirt, IconStadium, IconTrophy } from './components/Icons';
 import { GameProvider, useGame, useLoadedGame } from './game';
@@ -145,30 +147,59 @@ function GameShell() {
   );
 }
 
+type MenuScreen = 'menu' | 'novo' | 'carregar' | 'editor';
+
 function Root() {
   const { state, setState } = useGame();
-  const [saved, setSaved] = useState<GameState | null | undefined>(undefined);
-  const [creating, setCreating] = useState(false);
+  const [screen, setScreen] = useState<MenuScreen>('menu');
+  const [saves, setSaves] = useState<SaveSummary[] | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    loadGame().then(setSaved);
-  }, []);
+    if (!state && screen === 'menu') listSaves().then(setSaves);
+  }, [state, screen]);
+  // Ao entrar numa carreira, o menu volta para a tela inicial (para quando a carreira for fechada).
+  useEffect(() => {
+    if (state) setScreen('menu');
+  }, [state]);
+
+  const open = (slot: number) => {
+    setBusy(true);
+    loadGame(slot).then((g) => {
+      setBusy(false);
+      if (g) setState(g);
+    });
+  };
 
   if (state) return <GameShell />;
-  if (creating) return <div className="app"><NewGame onCancel={() => setCreating(false)} /></div>;
+  if (screen === 'novo') return <div className="app"><NewGame onCancel={() => setScreen('menu')} /></div>;
+  if (screen === 'carregar') return <div className="app"><LoadGame onBack={() => setScreen('menu')} /></div>;
+  if (screen === 'editor') return <div className="app"><Editor onBack={() => setScreen('menu')} /></div>;
+
+  const last = saves?.slice().sort((a, b) => b.savedAt - a.savedAt)[0];
   return (
     <div className="app">
       <div className="title-screen">
+        <div className="title-logo"><IconBall /></div>
         <h1>Futebol <span>Manager</span></h1>
-        <p className="muted">Comande seu clube do estadual ao Mundial de Clubes.</p>
-        {saved === undefined && <p className="muted">Carregando...</p>}
-        {saved && (
-          <button className="btn gold" style={{ width: 260 }} onClick={() => setState(saved)}>
-            Continuar carreira<div className="small">{saved.coach.name} · {saved.clubs[saved.userClubId].name} · {saved.year}</div>
+        <p className="muted">Do estadual ao Mundial de Clubes. Você é o técnico.</p>
+        <div className="menu-buttons">
+          {last && (
+            <button className="btn gold menu-btn" onClick={() => open(last.slot)}>
+              Continuar<div className="small">{last.coach} · {last.club} · {last.year}</div>
+            </button>
+          )}
+          <button className="btn primary menu-btn" onClick={() => setScreen('novo')}>Novo jogo</button>
+          <button className="btn menu-btn" disabled={!saves?.length} onClick={() => setScreen('carregar')}>
+            Carregar jogo{saves && <div className="small muted">{saves.length ? `${saves.length} carreira(s) salva(s)` : 'nenhum jogo salvo'}</div>}
           </button>
-        )}
-        <button className="btn primary" style={{ width: 260, flex: 'none' }} onClick={() => setCreating(true)}>Novo jogo</button>
+          <button className="btn menu-btn" onClick={() => setScreen('editor')}>
+            Modo editor<div className="small muted">edite clubes, jogadores, habilidades e estilos</div>
+          </button>
+        </div>
+        <p className="small muted">Versão {__APP_VERSION__}</p>
       </div>
+      {busy && <div className="loading">Carregando carreira...</div>}
     </div>
   );
 }

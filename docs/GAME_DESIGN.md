@@ -1,10 +1,27 @@
 # Game design: regras e algoritmos
 
+## Menu inicial
+
+- **Continuar**: abre a carreira salva mais recentemente.
+- **Novo jogo** em 3 passos:
+  1. Técnico: nome, idade (o aviso de que a idade influencia o jogo aparece na hora), nacionalidade e, a partir de 30 anos, o passado como jogador.
+  2. Time: país, liga e clube, com a opção de usar o banco do editor.
+  3. Configurações: duração dos tempos, formato do Mundial e slot de save.
+- **Carregar jogo**: 3 slots de carreira, com opção de apagar.
+- **Modo editor**: banco de dados editável e salvo no aparelho, usado nas próximas carreiras. Permite:
+  - editar clubes: nome, sigla, cores, estádio, CT, base e caixa;
+  - editar jogadores: nome, posição, nacionalidade, idade, força, potencial, estrelas, estilo de jogo e
+    habilidades, escolhidas entre as 130 da posição, com limite pelas estrelas;
+  - criar jogadores novos, que começam com **15 anos**, e excluir jogadores.
+
+  O editor não altera carreiras já salvas, e o botão "Restaurar banco original" desfaz todas as edições.
+
 ## Técnico
 
 - Idade de **20 a 75 anos**. A tela de criação avisa que a idade influencia o jogo.
 - Com **30 anos ou mais** o usuário escolhe se o técnico foi jogador. Se foi, escolhe se
   **passou por vários clubes** ou **ficou em um só**, e se **teve carreira de títulos**.
+- Nacionalidade: jogadores compatriotas começam com +5 de respeito.
 - Experiência inicial (0–100): `(idade − 20) × 1,6` (máx. 50) + ex-jogador 10 + vários clubes 6 /
   um clube 3 + títulos 12. Um técnico de 20 anos começa com 0.
 - A experiência cresce a cada jogo (+0,12, +0,06 extra por vitória), por título (+3) e por temporada (+2).

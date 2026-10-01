@@ -1,7 +1,7 @@
 // Técnico: experiência inicial, prestígio e a relação inicial com o elenco.
 
 import { clamp } from './rng';
-import type { CarreiraJogador, Coach, Player } from './types';
+import type { CarreiraJogador, Coach, CountryCode, Player } from './types';
 
 export const IDADE_MIN = 20;
 export const IDADE_MAX = 75;
@@ -10,6 +10,7 @@ export const IDADE_EX_JOGADOR = 30;
 export interface CoachInput {
   name: string;
   age: number;
+  nat?: CountryCode;
   exPlayer: boolean;
   career: CarreiraJogador | null;
   titulosCarreira: boolean;
@@ -41,6 +42,7 @@ export function createCoach(input: CoachInput, clubId: number): Coach {
   return {
     name: input.name.trim() || 'Técnico',
     age: clamp(Math.round(input.age), IDADE_MIN, IDADE_MAX),
+    nat: input.nat ?? 'BRA',
     exPlayer,
     career: exPlayer ? input.career : null,
     titulosCarreira: exPlayer ? input.titulosCarreira : false,
@@ -66,6 +68,7 @@ export function initialRespeito(coach: Coach, p: Player): number {
   if (p.personality === 'profissional') r += 5;
   if (p.personality === 'temperamental') r -= 5;
   if (p.personality === 'lider' && gap > 0) r -= 4;
+  if (coach.nat && p.nat === coach.nat) r += 5;
   return Math.round(clamp(r, 8, 95));
 }
 

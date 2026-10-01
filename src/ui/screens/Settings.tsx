@@ -1,4 +1,4 @@
-import { deleteSave, saveGame } from '../../engine/save';
+import { saveGame } from '../../engine/save';
 import { useLoadedGame } from '../game';
 
 export function Settings() {
@@ -28,13 +28,9 @@ export function Settings() {
         <h2>Jogo</h2>
         <div className="btn-row">
           <button className="btn" onClick={() => saveGame(state).then(() => toast('Jogo salvo!'))}>Salvar agora</button>
-          <button className="btn danger" onClick={() => {
-            if (window.confirm('Abandonar esta carreira e voltar ao menu? O jogo salvo será apagado.')) {
-              deleteSave().then(() => setState(null));
-            }
-          }}>Novo jogo</button>
+          <button className="btn" onClick={() => saveGame(state).then(() => setState(null))}>Salvar e voltar ao menu</button>
         </div>
-        <p className="small muted">O jogo é salvo automaticamente no aparelho.</p>
+        <p className="small muted">O jogo é salvo automaticamente no slot {state.saveSlot ?? 1}. No menu você pode carregar outra carreira, começar um novo jogo ou abrir o modo editor.</p>
       </div>
     </div>
   );

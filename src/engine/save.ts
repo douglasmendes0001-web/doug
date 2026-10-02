@@ -45,6 +45,9 @@ export async function loadGame(slot: number): Promise<GameState | null> {
     if (!s || s.version !== SAVE_VERSION) return null;
     s.saveSlot = slot;
     migratePlayers(s.players);
+    if (!s.coach.history) {
+      s.coach.history = [{ clubId: s.userClubId, clubName: s.clubs[s.userClubId].name, fromYear: s.year, seasons: 0, games: 0, wins: 0, titles: [] }];
+    }
     return s;
   } catch {
     return null;

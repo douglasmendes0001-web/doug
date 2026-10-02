@@ -11,7 +11,8 @@ import { Rng, clamp } from './rng';
 import { initialSponsors, sponsorReview, type SeasonPerformance } from './sponsors';
 import { contractsSeasonEnd } from './transfers';
 import { starGrowth, youthSeasonEnd } from './youth';
-import type { Competition, CountryCode, GameState } from './types';
+import { IDADE_TETO, closeStint, openStint, stintSeasonEnd } from './career';
+import type { Competition, CountryCode, GameState, Player, SeasonRecord } from './types';
 
 function leagueComps(state: GameState, l: LeagueSeed): Competition[] {
   return state.competitions.filter((c) => c.def.leagueId === l.id);
@@ -28,8 +29,15 @@ export function leagueRanking(state: GameState, l: LeagueSeed): number[] {
 export function endSeason(state: GameState) {
   const rng = new Rng(state.rng);
   const champions: Record<string, number> = {};
-  for (const c of state.competitions) if (c.champion !== undefined) champions[c.def.id] = c.champion;
-  state.history.push({ year: state.year, champions });
+  const names: Record<string, string> = {};
+  const kinds: SeasonRecord['kinds'] = {};
+  for (const c of state.competitions) {
+    if (c.champion === undefined) continue;
+    champions[c.def.id] = c.champion;
+    names[c.def.id] = c.def.name;
+    kinds![c.def.id] = c.def.kind;
+  }
+  state.history.push({ year: state.year, champions, names, kinds });
   if (state.competitions.some((c) => c.def.id === 'MUN')) state.mundialEdition++;
 
   const objetivoCumprido = evaluateCoach(state);
@@ -52,7 +60,9 @@ export function endSeason(state: GameState) {
     const top = club.playerIds.map((id) => state.players[id].force).sort((a, b) => b - a).slice(0, 16);
     if (top.length) club.baseForce = top.reduce((s, f) => s + f, 0) / top.length;
   }
-  state.coach.age++;
+  stintSeasonEnd(state);
+  // O técnico envelhece até os 80 anos; depois disso, segue sem envelhecer.
+  if (state.coach.age < IDADE_TETO) state.coach.age++;
   state.coach.experience = clamp(state.coach.experience + 2, 0, 100);
   state.year++;
   state.rng = rng.state;
@@ -157,6 +167,8 @@ function developPlayers(state: GameState, rng: Rng) {
       if (p.age <= 23) p.force += (p.potential - p.force) * rng.range(0.15, 0.4) * ctMult * play;
       else if (p.age <= 29) p.force += rng.range(-1, 1.5);
       else if (p.age <= 32) p.force -= rng.range(0, 2);
+      // Lendários envelhecem devagar (jogam até 55 anos).
+      else if (p.legend || p.stars >= 6) p.force -= rng.range(0, 1.5);
       else p.force -= rng.range(1, 4);
       p.force = Math.round(clamp(p.force, 1, 135));
       p.age++;
@@ -168,12 +180,14 @@ function developPlayers(state: GameState, rng: Rng) {
       p.yellowCards = 0;
       p.suspendedGames = 0;
       p.energy = 100;
-      const retireP = p.age >= 39 ? 1 : p.age >= 34 ? (p.age - 33) * 0.2 : 0;
-      if (rng.chance(retireP)) {
+      if (rng.chance(retirementChance(p))) {
         p.retired = true;
         club.playerIds = club.playerIds.filter((x) => x !== id);
+        const herdeiro = heirOf(rng, state, p, club.id);
         if (club.id === state.userClubId) {
-          pushMessage(state, 'midia', 'Aposentadoria', `${p.name}, ${p.age} anos, anuncia o fim da carreira.`);
+          pushMessage(state, 'midia', 'Aposentadoria', `${p.name}, ${p.age} anos, anuncia o fim da carreira${p.legend ? ' — adeus a uma lenda' : ''}.`);
+          pushMessage(state, 'diretoria', 'Herdeiro na base',
+            `Um garoto de ${herdeiro.age} anos chamado ${herdeiro.name}, ${herdeiro.pos} como ele e com as mesmas características, surgiu nas categorias de base.`);
         }
       }
     }
@@ -193,6 +207,55 @@ function developPlayers(state: GameState, rng: Rng) {
   state.nextIds.player = state.players.length;
 }
 
+/**
+ * Chance de aposentadoria no fim do ano. Jogadores normais jogam no máximo até
+ * 43 anos; lendários (6-7 estrelas ou joias lendárias) até 55.
+ */
+export function retirementChance(p: Player): number {
+  const lendario = p.legend || p.stars >= 6;
+  if (lendario) return p.age >= 55 ? 1 : p.age >= 40 ? (p.age - 39) * 0.06 : 0;
+  return p.age >= 43 ? 1 : p.age >= 34 ? (p.age - 33) * 0.1 : 0;
+}
+
+/**
+ * Quando um jogador se aposenta, surge um "herdeiro" com 15-16 anos: mesmo
+ * nome, posição, força, estrelas, estilo, pé e habilidades. No clube do
+ * usuário ele vai para as categorias de base.
+ */
+export function heirOf(rng: Rng, state: GameState, p: Player, clubId: number): Player {
+  const club = state.clubs[clubId];
+  const h: Player = {
+    ...p,
+    id: state.players.length,
+    age: rng.int(15, 16),
+    abilities: [...p.abilities],
+    potential: Math.max(p.potential, p.force),
+    retired: undefined,
+    loan: undefined,
+    forSale: false,
+    promiseUntilSlot: undefined,
+    energy: 100,
+    respeito: clubId === state.userClubId ? initialRespeito(state.coach, p) : 65,
+    oportunidade: 50,
+    treino: 60,
+    injuredSlots: 0,
+    suspendedGames: 0,
+    yellowCards: 0,
+    seasonGoals: 0,
+    seasonGames: 0,
+    seasonAssists: 0,
+    benchStreak: 0,
+    contractUntil: state.year + 3,
+    youth: clubId === state.userClubId || undefined,
+  };
+  h.value = marketValue(h.force, h.age, h.stars);
+  h.salary = monthlySalary(h.value);
+  state.players.push(h);
+  if (h.youth) club.youthIds.push(h.id);
+  else club.playerIds.push(h.id);
+  return h;
+}
+
 // ---------------- Carreira (demissão e novas propostas) ----------------
 
 export function jobOffers(state: GameState): number[] {
@@ -205,6 +268,7 @@ export function jobOffers(state: GameState): number[] {
 
 export function takeJob(state: GameState, clubId: number) {
   const coach = state.coach;
+  closeStint(state);
   coach.clubId = clubId;
   coach.fired = false;
   coach.confDiretoria = 60;
@@ -214,4 +278,5 @@ export function takeJob(state: GameState, clubId: number) {
   state.lineup = autoLineup(state.clubs[clubId].playerIds.map((id) => state.players[id]), '4-4-2');
   initialSponsors(state, new Rng(state.rng ^ clubId));
   pushMessage(state, 'diretoria', 'Bem-vindo', `Seja bem-vindo ao ${state.clubs[clubId].name}, ${coach.name}. Contamos com você.`);
+  openStint(state, clubId);
 }

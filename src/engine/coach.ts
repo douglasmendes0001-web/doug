@@ -1,10 +1,11 @@
 // Técnico: experiência inicial, prestígio e a relação inicial com o elenco.
 
 import { clamp } from './rng';
-import type { CarreiraJogador, Coach, CountryCode, Player } from './types';
+import { careerExperienceBonus, careerPrestigeBonus, careerTotals } from './career';
+import type { CarreiraJogador, Coach, CountryCode, Player, PlayerCareer } from './types';
 
 export const IDADE_MIN = 20;
-export const IDADE_MAX = 75;
+export const IDADE_MAX = 80;
 export const IDADE_EX_JOGADOR = 30;
 
 export interface CoachInput {
@@ -12,6 +13,8 @@ export interface CoachInput {
   age: number;
   nat?: CountryCode;
   exPlayer: boolean;
+  /** História detalhada como jogador (opcional). */
+  playerCareer?: PlayerCareer;
   career: CarreiraJogador | null;
   titulosCarreira: boolean;
 }
@@ -24,6 +27,7 @@ export function initialExperience(c: CoachInput): number {
     if (c.career === 'variosClubes') exp += 6; // conhece muitos vestiários
     if (c.career === 'umClube') exp += 3; // identidade, liderança
     if (c.titulosCarreira) exp += 12;
+    exp += careerExperienceBonus(c.playerCareer);
   }
   return Math.round(clamp(exp, 0, 100));
 }
@@ -34,6 +38,10 @@ export function prestige(c: Coach): number {
   if (c.exPlayer) p += 10;
   if (c.titulosCarreira) p += 12;
   p += Math.min(20, c.titles.length * 4);
+  p += careerPrestigeBonus(c.playerCareer);
+  // Ídolos e lendas do clube atual impõem mais respeito.
+  const stint = c.history?.[c.history.length - 1];
+  if (stint && stint.toYear === undefined && stint.honor) p += stint.honor === 'lenda' ? 15 : 8;
   return clamp(p, 0, 100);
 }
 
@@ -45,7 +53,8 @@ export function createCoach(input: CoachInput, clubId: number): Coach {
     nat: input.nat ?? 'BRA',
     exPlayer,
     career: exPlayer ? input.career : null,
-    titulosCarreira: exPlayer ? input.titulosCarreira : false,
+    titulosCarreira: exPlayer ? input.titulosCarreira || careerTotals(input.playerCareer).total > 0 : false,
+    playerCareer: exPlayer ? input.playerCareer : undefined,
     experience: initialExperience(input),
     clubId,
     games: 0, wins: 0, draws: 0, losses: 0,
@@ -93,5 +102,8 @@ export function ageWarning(age: number): string {
   if (age < 55) {
     return 'A idade do técnico influencia o jogo: com essa idade você já tem experiência e os jogadores tendem a respeitar suas decisões.';
   }
-  return 'A idade do técnico influencia o jogo: muita experiência e respeito do elenco, mas a torcida e a mídia vão cobrar resultados de quem já viveu tudo.';
+  if (age < 75) {
+    return 'A idade do técnico influencia o jogo: muita experiência e respeito do elenco, mas a torcida e a mídia vão cobrar resultados de quem já viveu tudo.';
+  }
+  return 'A idade do técnico influencia o jogo: com ' + age + ' anos você é uma lenda viva do banco — máximo de experiência e respeito. Aos 80 anos o técnico para de envelhecer e pode seguir quantas temporadas quiser.';
 }

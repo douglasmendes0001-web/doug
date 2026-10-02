@@ -108,6 +108,8 @@ export interface Club {
   baseInvest: number;
   /** Investidores que ficam com uma fatia das vendas. */
   investors: Investor[];
+  /** Técnicos que viraram ídolos/lendas do clube (para sempre). */
+  legends?: { coach: string; honor: Honra; seasons: number; titles: number; until: number }[];
   /** Pontos dos últimos 5 jogos (3/1/0) — o "momento" do time. */
   form?: number[];
 }
@@ -157,7 +159,42 @@ export interface Coach {
   confDiretoria: number;
   confTorcida: number;
   fired: boolean;
+  /** História como jogador (criada no novo jogo, para técnicos ex-jogadores). */
+  playerCareer?: PlayerCareer;
+  /** Passagens como técnico por cada clube. */
+  history?: CoachStint[];
 }
+
+export interface PlayerCareer {
+  games: number;
+  goals: number;
+  assists: number;
+  clubs: { name: string; clubId?: number; titles: Record<string, number> }[];
+  /** Títulos pela seleção (ex.: Copa do Mundo → 1). */
+  national: Record<string, number>;
+  /** Prêmios individuais (ex.: Bola de Ouro → 2). */
+  individual: Record<string, number>;
+}
+
+export type Honra = 'idolo' | 'lenda';
+
+export interface CoachStint {
+  clubId: number;
+  clubName: string;
+  fromYear: number;
+  toYear?: number;
+  seasons: number;
+  games: number;
+  wins: number;
+  titles: string[];
+  honor?: Honra;
+}
+
+/** Artes mostradas em tela cheia (boas-vindas, título, lenda). */
+export type ArtEvent =
+  | { type: 'welcome'; clubId: number; coach: string; year: number; honor?: Honra }
+  | { type: 'title'; clubId: number; coach: string; year: number; compId: string; compName: string; kind: CompKind; quotes: { channel: CanalMensagem; text: string }[] }
+  | { type: 'legend'; clubId: number; coach: string; year: number; honor: Honra; seasons: number; titles: number };
 
 export type CanalMensagem = 'diretoria' | 'torcida' | 'midia' | 'jogador';
 
@@ -345,6 +382,9 @@ export interface Settings {
 export interface SeasonRecord {
   year: number;
   champions: Record<string, number>;
+  /** Nome e tipo de cada competição no ano (para a galeria de títulos). */
+  names?: Record<string, string>;
+  kinds?: Record<string, CompKind>;
 }
 
 export interface GameState {
@@ -376,6 +416,8 @@ export interface GameState {
   saveSlot?: number;
   /** A carreira foi alterada pelo modo editor. */
   edited?: boolean;
+  /** Artes pendentes para mostrar ao usuário. */
+  pendingArt?: ArtEvent[];
   /** Formações criadas pelo técnico. */
   customFormations?: Esquema[];
   /** Nota de desempenho da última temporada (patrocínios e investidores). */

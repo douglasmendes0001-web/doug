@@ -13,6 +13,7 @@ import { autoLineup, repairLineup } from './lineup';
 import { MatchSim, type MatchContext, type TeamContext } from './match';
 import { Rng, clamp } from './rng';
 import { buildSeasonCompetitions } from './seasonSetup';
+import { openStint, pushArt, stintMatch, stintTitle } from './career';
 import { initialSponsors, investorOffer, titleBonus, weeklySponsorIncome } from './sponsors';
 import { contractReminders, weeklyOffers } from './transfers';
 import { weeklyYouthTraining, youthIntake } from './youth';
@@ -62,6 +63,7 @@ export function newGame(opts: NewGameOptions, world = createWorld(opts.seed)): G
     state.players[id].respeito = initialRespeito(coach, state.players[id]);
   }
   state.lineup = autoLineup(squadOf(state, opts.clubId), '4-4-2');
+  openStint(state, opts.clubId);
   startSeason(state);
   return state;
 }
@@ -287,6 +289,7 @@ function afterUserMatch(state: GameState, fx: Fixture, sim: MatchSim, side: 0 | 
   state.lastUserFixtureId = fx.id;
 
   coach.games++;
+  stintMatch(state, pts === 3);
   if (pts === 3) coach.wins++;
   else if (pts === 1) coach.draws++;
   else coach.losses++;
@@ -438,15 +441,26 @@ function onCompetitionFinished(state: GameState, compId: string) {
   if (!comp.teams.includes(u)) return;
   if (comp.champion === u) {
     state.coach.titles.push(`${comp.def.name} ${state.year}`);
+    stintTitle(state, `${comp.def.name} ${state.year}`);
     state.coach.confDiretoria = clamp(state.coach.confDiretoria + 20, 0, 100);
     state.coach.confTorcida = clamp(state.coach.confTorcida + 25, 0, 100);
     state.coach.experience = clamp(state.coach.experience + 3, 0, 100);
     logFinance(state, `Premiação: campeão da ${comp.def.name}`, Math.round(comp.def.prize * Math.max(0.2, clubEco(state.clubs[u]))));
     titleBonus(state, comp.def.name);
     for (const id of state.clubs[u].playerIds) state.players[id].respeito = clamp(state.players[id].respeito + 10, 0, 100);
-    pushMessage(state, 'torcida', 'É CAMPEÃO!', `${comp.def.name} ${state.year} é nossa! Obrigado, ${state.coach.name}! A festa vai varar a madrugada!`);
-    pushMessage(state, 'midia', 'Título', `${state.clubs[u].name} conquista a ${comp.def.name}. ${state.coach.name} entra para a história do clube.`);
-    pushMessage(state, 'diretoria', 'Parabéns pelo título', `A diretoria parabeniza toda a comissão técnica pela conquista da ${comp.def.name}.`);
+    const club = state.clubs[u];
+    const grande = comp.def.kind === 'continental' || comp.def.kind === 'mundial';
+    const quotes = [
+      { channel: 'torcida' as const, text: grande
+        ? `${comp.def.name.toUpperCase()}! A maior noite da nossa história! ${state.coach.name}, você está eternizado no coração da torcida!`
+        : `${comp.def.name} ${state.year} é nossa! Obrigado, ${state.coach.name}! A festa vai varar a madrugada!` },
+      { channel: 'midia' as const, text: `${club.name} conquista a ${comp.def.name} ${state.year}. ${state.coach.name}${state.coach.age < 30 ? `, com apenas ${state.coach.age} anos,` : ''} entra para a história do clube.` },
+      { channel: 'diretoria' as const, text: `A diretoria parabeniza ${state.coach.name} e toda a comissão técnica pela conquista da ${comp.def.name}. Este título fica para sempre na galeria do clube.` },
+    ];
+    pushMessage(state, 'torcida', 'É CAMPEÃO!', quotes[0].text);
+    pushMessage(state, 'midia', 'Título', quotes[1].text);
+    pushMessage(state, 'diretoria', 'Parabéns pelo título', quotes[2].text);
+    pushArt(state, { type: 'title', clubId: u, coach: state.coach.name, year: state.year, compId: comp.def.id, compName: comp.def.name, kind: comp.def.kind, quotes });
   } else if (comp.runnerUp === u) {
     pushMessage(state, 'midia', 'Vice', `${state.clubs[u].name} fica com o vice na ${comp.def.name}.`);
   }

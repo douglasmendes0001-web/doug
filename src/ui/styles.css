@@ -275,3 +275,77 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .pitch-legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
 .pitch-legend b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 3px; vertical-align: middle; }
 .arrow-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 4px; justify-content: center; }
+
+/* ---------- Logo e artes ---------- */
+.game-logo { filter: drop-shadow(0 8px 22px rgba(0,0,0,0.55)); max-width: 62vw; height: auto; }
+.game-title { line-height: 1.2; margin-top: -10px; }
+.game-title-1 { font-size: 22px; font-weight: 800; letter-spacing: 10px; color: #eef2ee; padding-left: 10px; }
+.game-title-2 {
+  font-size: 42px; font-weight: 900; letter-spacing: 3px;
+  background: linear-gradient(180deg, #fff3c4 0%, #e6c35c 55%, #a8822a 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; padding-top: 6px;
+  filter: drop-shadow(0 2px 0 rgba(0,0,0,0.6));
+}
+.trophy { display: block; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5)); }
+
+.art-backdrop { position: fixed; inset: 0; z-index: 85; background: rgba(3, 8, 6, 0.88); display: flex; align-items: center; justify-content: center; padding: 14px; }
+.art-wrap { width: min(440px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; animation: art-in 0.5s ease-out; }
+@keyframes art-in { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.art-card {
+  position: relative; overflow: hidden; border-radius: 14px; padding: 22px 16px 18px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px solid rgba(230,195,92,0.7);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+.art-card > * { position: relative; }
+.art-kicker { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.85); }
+.art-big { font-size: 34px; font-weight: 900; letter-spacing: 2px; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,0.45); line-height: 1.05; }
+.art-name { font-size: 24px; font-weight: 800; color: var(--gold); text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
+.art-sub { font-size: 15px; color: #f1f5f1; }
+
+/* Boas-vindas nas cores do clube */
+.welcome-art { background: linear-gradient(160deg, var(--c1) 0%, #0b1611 75%); }
+.welcome-stripes { position: absolute !important; inset: 0; background: repeating-linear-gradient(115deg, transparent 0 26px, color-mix(in srgb, var(--c2) 18%, transparent) 26px 40px); }
+.welcome-lights { position: absolute !important; inset: 0; background: radial-gradient(circle at 15% 0%, rgba(255,255,255,0.35), transparent 35%), radial-gradient(circle at 85% 0%, rgba(255,255,255,0.35), transparent 35%); animation: flash 2.4s ease-in-out infinite; }
+@keyframes flash { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+.welcome-shirt { width: 170px; height: auto; filter: drop-shadow(0 8px 12px rgba(0,0,0,0.5)); }
+
+/* Título */
+.title-art { background: radial-gradient(circle at 50% 30%, #2f5a43 0%, #0b1611 70%); }
+.title-art.internacional { background: radial-gradient(circle at 50% 30%, #1d3f73 0%, #070d1a 72%); border-color: #f0d27a; }
+.title-rays {
+  position: absolute !important; left: 50%; top: 32%; width: 900px; height: 900px; margin: -450px 0 0 -450px;
+  background: repeating-conic-gradient(rgba(230,195,92,0.16) 0 8deg, transparent 8deg 20deg);
+  animation: spin 30s linear infinite; pointer-events: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.confetti { position: absolute !important; inset: 0; pointer-events: none; }
+.confetti i { position: absolute; top: -12px; width: 7px; height: 12px; border-radius: 2px; opacity: 0.9; animation: fall 3.2s linear infinite; }
+.confetti i:nth-child(odd) { width: 9px; height: 7px; animation-duration: 3.9s; }
+@keyframes fall { from { transform: translateY(0) rotate(0); } to { transform: translateY(640px) rotate(540deg); } }
+.art-quotes { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 6px; }
+.art-quote { background: rgba(0,0,0,0.45); border-left: 4px solid var(--gold); border-radius: 0 8px 8px 0; padding: 7px 9px; font-size: 13px; text-align: left; line-height: 1.35; }
+.art-quote b { display: block; color: var(--gold); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+
+/* Lenda */
+.legend-art { background: radial-gradient(circle at 50% 35%, #4a3a12 0%, #120d03 75%); }
+.laurel { width: 220px; height: 160px; margin-bottom: -150px; }
+.legend-crest { height: 150px; display: flex; align-items: center; }
+
+/* Galeria */
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.gallery-item { background: radial-gradient(circle at 50% 30%, #23402f, #0f1e17 80%); border: 1px solid var(--line); border-radius: 8px; padding: 10px 6px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.gallery-item.internacional { background: radial-gradient(circle at 50% 30%, #1d3f73, #070d1a 80%); border-color: rgba(240,210,122,0.6); }
+.gallery-count { font-size: 26px; font-weight: 900; color: var(--gold); line-height: 1; }
+.gallery-years { font-size: 11px; color: var(--muted); }
+.legend-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid rgba(43,74,58,.5); }
+.honor-tag { font-size: 11px; font-weight: 800; border-radius: 3px; padding: 1px 6px; background: var(--gold); color: #1c1606; }
+.honor-tag.idolo { background: #c3cbcf; }
+
+/* Criador da história como jogador */
+.career-builder { background: rgba(0,0,0,0.18); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px 8px; margin-bottom: 12px; }
+.counter-row { display: grid; grid-template-columns: 1fr 34px 26px 34px; align-items: center; gap: 4px; padding: 3px 0; font-size: 13px; border-bottom: 1px solid rgba(43,74,58,.4); }
+.counter-row b { text-align: center; }
+.counter-row .btn.small { padding: 3px 0; }
+.career-club { border-left: 5px solid var(--c1); background: var(--row); padding: 6px 8px; margin-bottom: 4px; border-radius: 0 4px 4px 0; }
+.link-btn { background: none; border: none; padding: 4px 0; text-align: left; }
+.stint-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 0; border-bottom: 1px solid rgba(43,74,58,.5); font-size: 13px; }

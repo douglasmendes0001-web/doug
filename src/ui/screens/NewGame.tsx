@@ -4,8 +4,10 @@ import { LIGAS } from '../../engine/data/ligas';
 import { PAISES } from '../../engine/data/paises';
 import { SLOTS, listSaves, loadEditorWorld, type SaveSummary } from '../../engine/save';
 import { newGame } from '../../engine/season';
-import type { AutoSave, CarreiraJogador, CountryCode } from '../../engine/types';
+import { careerTotals } from '../../engine/career';
+import type { AutoSave, CarreiraJogador, CountryCode, PlayerCareer } from '../../engine/types';
 import { createWorld, type World } from '../../engine/world';
+import { CareerBuilder, emptyCareer } from '../components/CareerBuilder';
 import { Flag } from '../components/Flag';
 import { useGame } from '../game';
 
@@ -39,7 +41,7 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
   const [nat, setNat] = useState<CountryCode>('BRA');
   const [exPlayer, setExPlayer] = useState(false);
   const [career, setCareer] = useState<CarreiraJogador>('variosClubes');
-  const [titulos, setTitulos] = useState(false);
+  const [pc, setPc] = useState<PlayerCareer>(emptyCareer);
   const [country, setCountry] = useState<CountryCode>('BRA');
   const [leagueId, setLeagueId] = useState('BRA1');
   const [clubId, setClubId] = useState<number | null>(null);
@@ -51,8 +53,10 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
 
   const ligas = LIGAS.filter((l) => l.country === country);
   const clubs = world.clubs.filter((c) => c.leagueId === leagueId).sort((a, b) => b.baseForce - a.baseForce);
-  const coachInput = { name, age, nat, exPlayer: age >= IDADE_EX_JOGADOR && exPlayer, career, titulosCarreira: titulos };
+  const isEx = age >= IDADE_EX_JOGADOR && exPlayer;
+  const coachInput = { name, age, nat, exPlayer: isEx, career, titulosCarreira: careerTotals(pc).total > 0, playerCareer: isEx ? pc : undefined };
   const exp = initialExperience(coachInput);
+  const expSemHistoria = initialExperience({ ...coachInput, titulosCarreira: false, playerCareer: undefined });
   const club = clubId !== null ? world.clubs[clubId] : null;
   const occupied = saves.find((s) => s.slot === slot);
 
@@ -111,22 +115,21 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
                     <label>Carreira como jogador</label>
                     <div className="choice-row">
                       <button className={`choice ${career === 'variosClubes' ? 'on' : ''}`} onClick={() => setCareer('variosClubes')}>Passou por vários clubes</button>
-                      <button className={`choice ${career === 'umClube' ? 'on' : ''}`} onClick={() => setCareer('umClube')}>Ficou em um clube só</button>
+                      <button className={`choice ${career === 'umClube' ? 'on' : ''}`} onClick={() => { setCareer('umClube'); setPc((x) => ({ ...x, clubs: x.clubs.slice(0, 1) })); }}>Ficou em um clube só</button>
                     </div>
                   </div>
                   <div className="form-field">
-                    <label>Teve carreira de títulos?</label>
-                    <div className="choice-row">
-                      <button className={`choice ${titulos ? 'on' : ''}`} onClick={() => setTitulos(true)}>Sim, foi campeão</button>
-                      <button className={`choice ${!titulos ? 'on' : ''}`} onClick={() => setTitulos(false)}>Não</button>
-                    </div>
+                    <label>História como jogador</label>
+                    <span className="small muted">Jogos, gols, assistências, clubes e títulos (por clube, seleção e individuais). Títulos e prêmios aumentam a experiência e o respeito dos jogadores.</span>
                   </div>
+                  <CareerBuilder world={world} nat={nat} career={career} value={pc} onChange={setPc} />
                 </>
               )}
             </>
           )}
           <div className="kv">
             <span className="k">Experiência inicial</span><span className="gold">{experienceLabel(exp)} ({exp}/100)</span>
+            {isEx && exp > expSemHistoria && (<><span className="k">Bônus da história como jogador</span><span className="pos">+{exp - expSemHistoria}</span></>)}
           </div>
           <div className="btn-row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={onCancel}>Menu</button>
@@ -214,6 +217,7 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
             <span className="k">Técnico</span><span>{name}, {age} anos, {PAISES[nat].name}</span>
             <span className="k">Clube</span><span>{club.name}</span>
             <span className="k">Experiência</span><span>{experienceLabel(exp)}</span>
+            {isEx && (<><span className="k">Como jogador</span><span>{pc.games} jogos · {pc.goals} gols · {pc.assists} assist. · {careerTotals(pc).total} títulos</span></>)}
           </div>
           <div className="btn-row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={() => setStep(1)}>Voltar</button>

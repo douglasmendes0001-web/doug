@@ -6,6 +6,7 @@ import { forecastCompetition, type ForecastRow } from '../../engine/forecast';
 import { topScorers } from '../../engine/standings';
 import type { Competition, GameState } from '../../engine/types';
 import { useLoadedGame } from '../game';
+import { Gallery } from './Gallery';
 
 function Tables({ state, comp, stageIdx }: { state: GameState; comp: Competition; stageIdx: number }) {
   const st = comp.stages[stageIdx];
@@ -117,6 +118,19 @@ function Forecast({ state, comp }: { state: GameState; comp: Competition }) {
 }
 
 export function Competitions() {
+  const [view, setView] = useState<'tabelas' | 'galeria'>('tabelas');
+  return (
+    <div>
+      <div className="tabs">
+        <button className={`tab ${view === 'tabelas' ? 'active' : ''}`} onClick={() => setView('tabelas')}>Tabelas</button>
+        <button className={`tab ${view === 'galeria' ? 'active' : ''}`} onClick={() => setView('galeria')}>Galeria de títulos</button>
+      </div>
+      {view === 'tabelas' ? <Tabelas /> : <Gallery />}
+    </div>
+  );
+}
+
+function Tabelas() {
   const { state } = useLoadedGame();
   const u = state.userClubId;
   const mine = state.competitions.filter((c) => c.teams.includes(u));

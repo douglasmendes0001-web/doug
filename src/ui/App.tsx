@@ -3,7 +3,9 @@ import { jobOffers, takeJob } from '../engine/endSeason';
 import { unreadCount } from '../engine/inbox';
 import { listSaves, loadGame, type SaveSummary } from '../engine/save';
 import { advanceToNextUserMatch, userFixtureAtSlot, type SlotReport } from '../engine/season';
-import type { Fixture, GameState } from '../engine/types';
+import type { ArtEvent, Fixture, GameState } from '../engine/types';
+import { GameLogo, GameTitle, LegendArt, TitleArt, WelcomeArt } from './components/Art';
+import { applause, fanfare, getSoundPrefs, setSoundPrefs } from './sound';
 import { Editor } from './screens/Editor';
 import { LoadGame } from './screens/LoadGame';
 import { Header } from './components/Header';
@@ -59,6 +61,27 @@ function Fired() {
           );
         })}
         <button className="btn danger" style={{ marginTop: 10 }} onClick={() => setState(null)}>Encerrar carreira</button>
+      </div>
+    </div>
+  );
+}
+
+/** Mostra as artes pendentes (boas-vindas, título, lenda) uma de cada vez. */
+function ArtOverlay({ art, onClose }: { art: ArtEvent; onClose: () => void }) {
+  const { state } = useLoadedGame();
+  const club = state.clubs[art.clubId];
+  useEffect(() => {
+    if (art.type === 'welcome') applause(3);
+    else fanfare();
+  }, [art]);
+  if (!club) return null;
+  return (
+    <div className="art-backdrop">
+      <div className="art-wrap">
+        {art.type === 'welcome' && <WelcomeArt club={club} coach={art.coach} year={art.year} honor={art.honor} />}
+        {art.type === 'title' && <TitleArt club={club} coach={art.coach} year={art.year} compName={art.compName} kind={art.kind} compId={art.compId} quotes={art.quotes} />}
+        {art.type === 'legend' && <LegendArt club={club} coach={art.coach} honor={art.honor} seasons={art.seasons} titles={art.titles} year={art.year} />}
+        <button className="btn gold" onClick={onClose}>Continuar ▶</button>
       </div>
     </div>
   );
@@ -142,6 +165,9 @@ function GameShell() {
       {busy && <div className="loading">Simulando rodadas...</div>}
       {summary && <SeasonSummary state={state} onClose={() => setSummary(false)} />}
       {state.coach.fired && <Fired />}
+      {!!state.pendingArt?.length && !busy && (
+        <ArtOverlay art={state.pendingArt[0]} onClose={() => update((s) => { s.pendingArt = s.pendingArt?.slice(1); })} />
+      )}
       {toastMsg && <div className="toast">{toastMsg}</div>}
     </div>
   );
@@ -154,6 +180,7 @@ function Root() {
   const [screen, setScreen] = useState<MenuScreen>('menu');
   const [saves, setSaves] = useState<SaveSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [som, setSom] = useState(getSoundPrefs().on);
 
   useEffect(() => {
     if (!state && screen === 'menu') listSaves().then(setSaves);
@@ -180,8 +207,8 @@ function Root() {
   return (
     <div className="app">
       <div className="title-screen">
-        <div className="title-logo"><IconBall /></div>
-        <h1>Futebol <span>Manager</span></h1>
+        <GameLogo size={230} />
+        <GameTitle />
         <p className="muted">Do estadual ao Mundial de Clubes. Você é o técnico.</p>
         <div className="menu-buttons">
           {last && (
@@ -197,6 +224,7 @@ function Root() {
             Modo editor<div className="small muted">edite clubes, jogadores, habilidades e estilos</div>
           </button>
         </div>
+        <button className="btn small" onClick={() => { setSoundPrefs({ on: !som }); setSom(!som); }}>{som ? '🔊 Som ligado' : '🔇 Som desligado'}</button>
         <p className="small muted">Versão {__APP_VERSION__}</p>
       </div>
       {busy && <div className="loading">Carregando carreira...</div>}

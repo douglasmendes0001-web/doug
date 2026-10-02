@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
 export default defineConfig({
   plugins: [react()],
-  define: { __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.2.0') },
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   // Caminhos relativos para funcionar dentro do WebView do Capacitor.
   base: './',
   build: { chunkSizeWarningLimit: 1200 },

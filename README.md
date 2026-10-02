@@ -1,8 +1,12 @@
-# Futebol Manager
+# Futebol Visionário: Modo Carreira
 
 Jogo de gerenciamento de futebol para celular, no estilo Brasfoot. Você escolhe um clube,
 cria o técnico (idade e passado como jogador mudam o jogo) e comanda o time em estaduais,
 ligas nacionais, copas, torneios continentais e na Copa do Mundo de Clubes.
+
+Tem logo próprio na tela inicial, arte de apresentação a cada clube novo, arte de celebração
+a cada título (com recados da torcida, da mídia e da diretoria), homenagem de ídolo/lenda do
+clube, galeria de títulos e sons gerados na hora (apito, torcida, grito de gol, vaias).
 
 ## Stack
 
@@ -53,8 +57,11 @@ src/engine/
   forecast.ts    previsão Monte Carlo (Libertadores, copas e ligas)
   actions.ts     respostas às mensagens (propostas, patrocínio, contratos...)
   editor.ts      modo editor (edição de clubes e jogadores do banco de dados)
+  career.ts      história do técnico como jogador, passagens, ídolo/lenda e fila de artes
   save.ts        3 slots de carreira + banco do editor no IndexedDB
 src/ui/          telas no estilo Brasfoot
+  sound.ts       sons com Web Audio (sem arquivos de áudio)
+  components/Art.tsx  logo, troféus, artes de boas-vindas, título e lenda (SVG)
 tests/           testes do motor
 scripts/         gerador do banco de habilidades
 docs/GAME_DESIGN.md  regras, algoritmos e a pesquisa dos formatos das ligas

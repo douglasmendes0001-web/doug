@@ -453,9 +453,9 @@ function onCompetitionFinished(state: GameState, compId: string) {
     const quotes = [
       { channel: 'torcida' as const, text: grande
         ? `${comp.def.name.toUpperCase()}! A maior noite da nossa história! ${state.coach.name}, você está eternizado no coração da torcida!`
-        : `${comp.def.name} ${state.year} é nossa! Obrigado, ${state.coach.name}! A festa vai varar a madrugada!` },
-      { channel: 'midia' as const, text: `${club.name} conquista a ${comp.def.name} ${state.year}. ${state.coach.name}${state.coach.age < 30 ? `, com apenas ${state.coach.age} anos,` : ''} entra para a história do clube.` },
-      { channel: 'diretoria' as const, text: `A diretoria parabeniza ${state.coach.name} e toda a comissão técnica pela conquista da ${comp.def.name}. Este título fica para sempre na galeria do clube.` },
+        : `O título do ${comp.def.name} ${state.year} é nosso! Obrigado, ${state.coach.name}! A festa vai varar a madrugada!` },
+      { channel: 'midia' as const, text: `${club.name} conquista o título do ${comp.def.name} ${state.year}. ${state.coach.name}${state.coach.age < 30 ? `, com apenas ${state.coach.age} anos,` : ''} entra para a história do clube.` },
+      { channel: 'diretoria' as const, text: `A diretoria parabeniza ${state.coach.name} e toda a comissão técnica pela conquista do título do ${comp.def.name}. Este título fica para sempre na galeria do clube.` },
     ];
     pushMessage(state, 'torcida', 'É CAMPEÃO!', quotes[0].text);
     pushMessage(state, 'midia', 'Título', quotes[1].text);

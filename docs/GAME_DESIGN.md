@@ -29,9 +29,17 @@
 
 ## Técnico
 
-- Idade de **20 a 75 anos**. A tela de criação avisa que a idade influencia o jogo.
+- Idade de **20 a 80 anos**. A tela de criação avisa que a idade influencia o jogo.
+- O técnico envelhece 1 ano por temporada **até os 80**. A partir daí não envelhece mais e
+  pode seguir quantas temporadas quiser (dá para começar a carreira já com 80).
 - Com **30 anos ou mais** o usuário escolhe se o técnico foi jogador. Se foi, escolhe se
-  **passou por vários clubes** ou **ficou em um só**, e se **teve carreira de títulos**.
+  **passou por vários clubes** ou **ficou em um só** e monta a **história como jogador**:
+  jogos, gols, assistências, clubes (país → clube; só 1 se "um clube só"), títulos por clube
+  (as competições do país do clube, estadual, continentais e Mundial), títulos pela seleção
+  (Copa do Mundo, Copa América/Eurocopa conforme a confederação, Confederações, Olimpíadas,
+  Mundial Sub-20) e prêmios individuais (Bola de Ouro, Melhor do mundo, Chuteira de Ouro...).
+- Bônus da história: experiência `mín(10, títulos de clube) + mín(8, 2 × seleção) +
+  mín(6, 2 × prêmios) + 3 (400+ jogos) / 1 (200+ jogos)`, até +25; prestígio até +20.
 - Nacionalidade: jogadores compatriotas começam com +5 de respeito.
 - Experiência inicial (0–100): `(idade − 20) × 1,6` (máx. 50) + ex-jogador 10 + vários clubes 6 /
   um clube 3 + títulos 12. Um técnico de 20 anos começa com 0.
@@ -45,6 +53,45 @@
 - **Respeito inicial do elenco:** veteranos mais velhos que o técnico desconfiam
   (penalidade de até 32 pontos pela diferença de idade, reduzida pelo prestígio). Jovens se
   identificam com técnico jovem.
+
+## Passagens, ídolo e lenda
+
+- Cada clube que o técnico assume abre uma **passagem** (anos, temporadas, jogos, vitórias,
+  títulos), mostrada no perfil (tela Clube).
+- **Ídolo:** 5 temporadas no clube, ou 2 temporadas com 3 títulos.
+  **Lenda:** 8 temporadas, ou 5 com 3 títulos.
+- A honraria fica gravada no clube (galeria "Lendas e ídolos do banco") **mesmo depois que o
+  técnico sai**. Se ele voltar, a arte vira "O retorno do ídolo/da lenda" e ganha confiança
+  da torcida (+20/+35), da diretoria (+8/+15) e respeito do elenco (+8/+15). Enquanto estiver
+  no clube, ídolo dá +8 e lenda +15 de prestígio.
+- Torcida, mídia e diretoria mandam mensagens de homenagem; a diretoria registra a honraria.
+
+## Artes e sons
+
+- **Tela inicial:** logo (escudo dourado com bola e o "olho visionário", faixa "Modo Carreira").
+- **Boas-vindas:** a cada clube assumido (início da carreira ou nova proposta): cores do
+  clube, escudo, camisa com o sobrenome do técnico e o ano, nome do técnico e do clube.
+- **Título:** troféu por tipo (liga, copa, estadual em prata, continental, Libertadores/Champions
+  com alças grandes, Mundial com globo), confete e os recados da torcida, mídia e diretoria.
+  Títulos internacionais usam fundo azul de "noite de gala".
+- **Lenda/ídolo:** escudo com coroa de louros.
+- **Galeria de títulos** (Tabelas → Galeria): qualquer clube do mundo, troféus agrupados por
+  competição com quantidade e anos, lendas/ídolos do banco e os títulos do técnico. Conta os
+  títulos desde o início da carreira (títulos reais anteriores não entram).
+- **Sons** (Web Audio, sem arquivos): apito (1 início, 2 intervalo, 3 fim), torcida ao fundo
+  com cantoria ritmada (volume pela lotação e mais forte no fim do jogo), grito de gol com
+  buzinas para o seu time, explosão do estádio quando o mandante adversário marca, lamento
+  quando você sofre gol em casa, "uhh" em chances e defesas, vaias, aplausos na apresentação e
+  fanfarra nos títulos. Liga/desliga e volume em Ajustes (e na tela inicial).
+
+## Aposentadoria e herdeiros
+
+- Jogadores comuns: chance de parar a partir dos 34 (`(idade − 33) × 10%`), obrigatório aos **43**.
+- Lendários (6★+): a partir dos 40 (`(idade − 39) × 6%`), obrigatório aos **55**; perdem só
+  0 a 1,5 de força por ano depois dos 32.
+- Ao se aposentar, surge um **herdeiro de 15-16 anos** com o mesmo nome, posição, força,
+  estrelas, estilo, pé e habilidades: vai para a base do seu clube (com aviso da diretoria) ou
+  para o elenco dos clubes da IA.
 
 ## Respeito (relação jogador × técnico)
 

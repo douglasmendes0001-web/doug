@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.douglas.futebolmanager',
-  appName: 'Futebol Manager',
+  appName: 'Futebol Visionário',
   webDir: 'dist',
   android: { backgroundColor: '#0d1f17' },
 };

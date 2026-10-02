@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AutoSave } from '../../engine/types';
 import { autoSaveMode, useLoadedGame } from '../game';
+import { goalRoar, getSoundPrefs, setSoundPrefs, whistle } from '../sound';
 import { CareerEditor } from './CareerEditor';
 
 const AUTOSAVE: { id: AutoSave; label: string; desc: string }[] = [
@@ -12,6 +13,8 @@ const AUTOSAVE: { id: AutoSave; label: string; desc: string }[] = [
 export function Settings() {
   const { state, update, setState, toast, saveNow, dirty, lastSaved } = useLoadedGame();
   const [editing, setEditing] = useState(false);
+  const [som, setSom] = useState(getSoundPrefs());
+  const mudaSom = (p: Partial<typeof som>) => { setSoundPrefs(p); setSom(getSoundPrefs()); };
   const modo = autoSaveMode(state);
 
   if (editing) return <CareerEditor onClose={() => setEditing(false)} />;
@@ -47,6 +50,21 @@ export function Settings() {
         <h2>Modo editor</h2>
         <p className="small muted">Edite clubes e jogadores desta carreira: força, estrelas, estilo, habilidades, criar jogadores de 15 anos e mais.</p>
         <button className="btn" onClick={() => setEditing(true)}>Abrir editor da carreira</button>
+      </div>
+
+      <div className="panel">
+        <h2>Sons</h2>
+        <div className="choice-row">
+          <button className={`choice ${som.on ? 'on' : ''}`} onClick={() => mudaSom({ on: true })}>Ligado</button>
+          <button className={`choice ${!som.on ? 'on' : ''}`} onClick={() => mudaSom({ on: false })}>Desligado</button>
+        </div>
+        <div className="row-between" style={{ marginTop: 8 }}>
+          <span className="small">Volume</span>
+          <input type="range" min={0} max={1} step={0.05} value={som.volume} disabled={!som.on} style={{ flex: 1 }}
+            onChange={(e) => mudaSom({ volume: Number(e.target.value) })} />
+          <button className="btn small" disabled={!som.on} onClick={() => { whistle(1); goalRoar(true); }}>Testar</button>
+        </div>
+        <p className="small muted">Apito, torcida ao fundo, grito de gol, "uhh" nas chances, vaias, aplausos na apresentação e fanfarra nos títulos.</p>
       </div>
 
       <div className="panel">

@@ -9,6 +9,7 @@ import { fixtureRoundLabel } from '../../engine/standings';
 import type { Fixture, GameState, Player } from '../../engine/types';
 import { CLIMA_LABEL, altitudeGap } from '../../engine/weather';
 import { useLoadedGame } from '../game';
+import { boo, crowdSet, crowdStart, crowdStop, goalRoar, groan, ooh, whistle } from '../sound';
 
 interface Props {
   fixture: Fixture;
@@ -105,6 +106,33 @@ export function MatchScreen({ fixture, onDone, onBack }: Props) {
     if (report) onDone(report);
   };
 
+  // Sons: cada evento novo toca uma vez. Ao pular para o fim, só o apito final.
+  const heard = useRef(0);
+  const evCount = sim.events.length;
+  useEffect(() => {
+    if (phase === 'pre') return;
+    const novos = sim.events.slice(heard.current);
+    heard.current = sim.events.length;
+    if (!novos.length) return;
+    const pulo = novos.length > 6;
+    for (const e of pulo ? novos.filter((x) => x.text.startsWith('Fim de jogo')) : novos) {
+      if (e.type === 'gol') {
+        if (e.side === side) goalRoar(true);
+        else if (e.side === 0) goalRoar(false); // gol do mandante adversário: estádio explode
+        else groan();
+      } else if (e.type === 'vermelho' || e.text.startsWith('Vaias')) boo();
+      else if ((e.type === 'defesa' || e.type === 'chance') && Math.random() < 0.6) ooh();
+      else if (e.text.startsWith('Fim do primeiro tempo')) whistle(2);
+      else if (e.text.startsWith('Fim de jogo')) { whistle(3); crowdStop(); }
+    }
+    if (!sim.finished) crowdSet(sim.crowdIntensity() + (sim.half === 2 && sim.minute >= 75 ? 0.15 : 0));
+  }, [evCount, phase, sim, side]);
+  useEffect(() => () => crowdStop(), []);
+  const kickoff = () => {
+    whistle(1);
+    crowdStart(fixture.neutral ? 0.2 : sim.crowdIntensity());
+  };
+
   const [hg, ag] = sim.score;
   const mySide = sim.sides[side];
   const totalPosse = sim.sides[0].posse + sim.sides[1].posse || 1;
@@ -148,7 +176,7 @@ export function MatchScreen({ fixture, onDone, onBack }: Props) {
           <div className="small muted" style={{ marginTop: 4 }}>{starters.map((p) => p.name).join(', ')}</div>
         </div>
         <div className="btn-row">
-          <button className="btn primary" onClick={() => { setPhase('live'); setRunning(true); }}>Começar partida</button>
+          <button className="btn primary" onClick={() => { setPhase('live'); setRunning(true); kickoff(); }}>Começar partida</button>
           <button className="btn" onClick={() => finish(true)}>Simular</button>
           <button className="btn" onClick={onBack}>Voltar ao elenco</button>
         </div>
@@ -223,7 +251,7 @@ export function MatchScreen({ fixture, onDone, onBack }: Props) {
           <button className="btn gold" onClick={() => finish(false)}>Continuar</button>
         ) : (
           <>
-            <button className="btn primary" onClick={() => setRunning((r) => !r)}>{running ? 'Pausar' : sim.minute === 0 ? 'Iniciar' : 'Continuar'}</button>
+            <button className="btn primary" onClick={() => { if (!running && sim.isHalfTime) whistle(1); setRunning((r) => !r); }}>{running ? 'Pausar' : sim.minute === 0 ? 'Iniciar' : 'Continuar'}</button>
             <button className="btn" disabled={mySide.subsUsed >= MAX_SUBS} onClick={() => { setRunning(false); setShowSubs(true); }}>Substituir</button>
             <button className="btn" title="Acelerar até o fim" onClick={() => { setRunning(false); while (!sim.finished) sim.step(); setPhase('end'); setTick((t) => t + 1); }}>Fim ▸▸</button>
           </>

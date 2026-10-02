@@ -1,3 +1,4 @@
+import { IDADE_TETO, careerTotals } from '../../engine/career';
 import { experienceLabel } from '../../engine/coach';
 import {
   EXPANSOES, baseTicketPrice, ctUpgradeCost, expandStadium, expansionCost, setTicketPrice, upgradeCT, weeklySalaries,
@@ -28,7 +29,7 @@ export function ClubScreen() {
       <div className="panel">
         <h2>Técnico</h2>
         <div className="kv">
-          <span className="k">Nome / idade</span><span>{c.name}, {c.age} anos</span>
+          <span className="k">Nome / idade</span><span>{c.name}, {c.age} anos{c.age >= IDADE_TETO ? ' (não envelhece mais)' : ''}</span>
           <span className="k">Experiência</span><span>{experienceLabel(c.experience)} ({Math.round(c.experience)})</span>
           <span className="k">Carreira como jogador</span>
           <span>{c.exPlayer ? `${c.career === 'umClube' ? 'Um clube só' : 'Vários clubes'}${c.titulosCarreira ? ', com títulos' : ', sem títulos'}` : 'Não foi jogador'}</span>
@@ -36,6 +37,33 @@ export function ClubScreen() {
           <span className="k">Objetivo da temporada</span><span className="gold">{state.seasonObjective}</span>
         </div>
         {c.titles.length > 0 && <div className="small">Títulos: {c.titles.join(' · ')}</div>}
+        {c.playerCareer && (() => {
+          const pc = c.playerCareer;
+          const t = careerTotals(pc);
+          const lista = (r: Record<string, number>) => Object.entries(r).filter(([, n]) => n > 0).map(([k, n]) => `${n}x ${k}`).join(', ');
+          return (
+            <>
+              <h3>Como jogador</h3>
+              <div className="small">{pc.games} jogos · {pc.goals} gols · {pc.assists} assistências · {t.total} títulos · {t.individuais} prêmios</div>
+              {pc.clubs.map((cl, i) => <div key={i} className="small"><b>{cl.name}</b>{lista(cl.titles) ? `: ${lista(cl.titles)}` : ''}</div>)}
+              {lista(pc.national) && <div className="small"><b>Seleção</b>: {lista(pc.national)}</div>}
+              {lista(pc.individual) && <div className="small"><b>Individuais</b>: {lista(pc.individual)}</div>}
+            </>
+          );
+        })()}
+        {!!c.history?.length && (
+          <>
+            <h3>Passagens como técnico</h3>
+            {c.history.slice().reverse().map((h, i) => (
+              <div key={i} className="stint-row">
+                <span><b>{h.clubName}</b> {h.honor && <span className={`honor-tag ${h.honor}`}>{h.honor === 'lenda' ? 'LENDA' : 'ÍDOLO'}</span>}</span>
+                <span className="muted">{h.fromYear}–{h.toYear ?? 'atual'}</span>
+                <span className="muted">{h.seasons} temp. · {h.games} jogos · {h.wins} vitórias</span>
+                <span className="gold">{h.titles.length} título(s)</span>
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
       <div className="panel">

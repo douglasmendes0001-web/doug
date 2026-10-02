@@ -29,10 +29,18 @@ npm run build      # typecheck + build de produção em dist/
 
 ### Android
 
+**APK de teste:** a cada push, o GitHub Actions (`.github/workflows/android.yml`) roda os
+testes, gera o APK e publica numa *release* de teste (aba **Releases** do repositório,
+arquivo `futebol-visionario-<versão>-build<N>.apk`). No celular, baixe e abra o arquivo
+(permitindo "instalar apps desconhecidos"). Os APKs usam uma chave de teste fixa
+(`android/app/teste.keystore`), então cada build novo instala por cima e mantém os saves.
+
+Localmente (precisa do Android SDK):
+
 ```bash
-npx cap add android      # só na primeira vez (cria a pasta android/)
 npm run android:sync     # build + copia para o projeto Android
 npm run android:open     # abre no Android Studio
+cd android && ./gradlew assembleDebug   # gera app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## Estrutura

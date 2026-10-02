@@ -1,0 +1,70 @@
+name: APK Android
+
+on:
+  push:
+    branches: [main, ccr-5291b6f1-8n6p2p]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testes e build web
+        run: |
+          npx vitest run
+          npm run build
+
+      - name: Sincronizar Capacitor
+        run: npx cap sync android
+
+      - name: Gerar APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Renomear APK
+        id: apk
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          NAME="futebol-visionario-${VERSION}-build${GITHUB_RUN_NUMBER}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.name }}
+
+      - name: Publicar release de teste
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: teste-${{ steps.apk.outputs.version }}-build${{ github.run_number }}
+          name: Futebol Visionário ${{ steps.apk.outputs.version }} (teste ${{ github.run_number }})
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          files: ${{ steps.apk.outputs.name }}
+          body: |
+            APK de teste (build ${{ github.run_number }}, commit ${{ github.sha }}).
+            No celular: baixe o .apk abaixo e abra. Se o Android pedir, permita "instalar apps desconhecidos" para o navegador.
+            Builds novos instalam por cima e mantêm as carreiras salvas.

@@ -24,6 +24,8 @@
   - "Manual": só salva com "Salvar agora".
 
   Ajustes mostra se há alterações não salvas e oferece "Sair sem salvar".
+  Nos modos "A cada partida" e "Sempre", o jogo também salva **em segundo plano**: quando o app é
+  minimizado, a tela apaga ou a página é fechada.
 
 ## Técnico
 
@@ -182,6 +184,52 @@ dá +3%; condicional dá +6%, mas só quando a condição está ativa.
 | Meia de ligação | Construtor / Veloz | constrói jogadas / está em todo o meio (mais posse) |
 | Armador | Na medida / Abre caminho | assistência perfeita (gol mais provável) / dribla a barreira que travaria o lance |
 | Atacante | Segundo atacante / Pivô / Nato | volta para armar / segura e rola para quem chega / finaliza e converte mais |
+
+## Formações (24 + até 5 personalizadas)
+
+As formações são inspiradas nas do EA FC 26 e do eFootball. Cada uma tem 11 vagas com função, lado
+(esquerda, centro ou direita) e posição no campo.
+
+| Categoria | Formações |
+|---|---|
+| Ofensivas | 4-3-3, 4-2-1-3, 4-1-2-3, 4-2-4, 4-2-2-2 (quadrado), 3-4-3, 3-4-1-2 |
+| Contra-ataque | 5-2-3, 5-2-1-2 |
+| Posse de bola | 4-2-3-1, 4-3-3 (falso 9), 4-1-2-1-2 (losango), 4-3-2-1 (árvore de natal), 4-3-1-2, 3-4-2-1, 3-2-4-1, 3-1-4-2 |
+| Equilibradas | 4-4-2, 4-4-1-1, 4-1-3-2, 3-5-2 |
+| Defensivas | 4-1-4-1, 4-5-1, 5-3-2, 5-4-1 |
+
+- **Editor de formação** (Elenco → "Editar formação"): o técnico muda a função e o lado de cada vaga e a
+  move no campo com as setas. Pode salvar até 5 formações. A validação exige 1 goleiro, pelo menos 3
+  defensores (com 1 zagueiro) e no máximo 5 atacantes.
+- **No motor:**
+  - meia avançado (camisa 10, falso 9) ataca mais e meia recuado marca mais;
+  - atacante recuado ajuda o meio;
+  - vagas abertas aumentam os cruzamentos;
+  - meio-campo central povoado aumenta a posse.
+- **Campinho:** mostra quem está em cada vaga, com cores de encaixe (ideal, pé/lado trocado, fora de
+  posição). Tocar em dois jogadores troca as posições.
+
+## Pé dominante
+
+- Cada jogador é **destro, canhoto ou ambidestro**. Laterais esquerdos tendem a ser canhotos e laterais
+  direitos, destros.
+- Jogar do lado "errado" custa rendimento: lateral −10%, meia aberto −6%, ponta −4% (o ponta com pé
+  invertido ainda corta para dentro). Também cruza menos.
+- Ambidestro rende igual dos dois lados. A escalação automática já põe cada um no lado certo.
+
+## Ambiente: momento, diretoria e torcidas
+
+- **Momento do time:** a média de pontos dos últimos 5 jogos vale de −2,5% a +2,5% de rendimento.
+- **Diretoria e torcida com o técnico** (só o seu time): com confiança alta o time "joga solto" (+1,5%);
+  sob pressão, trava (até −3%).
+- **Torcida mandante:** a intensidade vem da reputação, do tamanho do estádio e do humor, e é 25% maior
+  em jogos grandes.
+  - Pressiona o visitante: até −3% por jogador. Jovens, temperamentais e jogadores com poucas estrelas
+    sentem mais; líderes, veteranos e craques, menos.
+  - Empurra o time da casa no fim do jogo quando ele não está ganhando.
+  - Vaia o próprio time quando ele perde no 2º tempo, e aí os donos da casa também sentem a pressão.
+- A tela pré-jogo mostra o momento dos dois times, o clima com a diretoria e a torcida e o tamanho da
+  pressão da arquibancada.
 
 ## Táticas do técnico (12)
 

@@ -1,6 +1,7 @@
 // Tipos centrais do motor do jogo. Nenhum código de UI deve ser importado aqui.
 
 import type { EstiloId, TaticaId } from './data/estilos';
+import type { Esquema } from './data/formacoes';
 
 export type Pos = 'G' | 'LD' | 'ZG' | 'LE' | 'VOL' | 'MEI' | 'ATA';
 export type Setor = 'GOL' | 'DEF' | 'MEI' | 'ATA';
@@ -12,6 +13,9 @@ export type CountryCode =
   | 'ENG' | 'ESP' | 'GER' | 'FRA' | 'ITA' | 'POR' | 'NED' | 'SCO' | 'TUR' | 'GRE'
   | 'KSA' | 'JPN' | 'KOR' | 'QAT' | 'UAE' | 'EGY' | 'MAR' | 'TUN' | 'RSA' | 'ALG' | 'NGA'
   | 'MEX' | 'USA' | 'CAN' | 'CRC' | 'NZL';
+
+/** Pé dominante: destro, canhoto ou ambidestro. */
+export type Pe = 'D' | 'E' | 'A';
 
 export type Personalidade = 'lider' | 'profissional' | 'temperamental' | 'ambicioso' | 'tranquilo';
 
@@ -34,6 +38,7 @@ export interface Player {
   /** Índices no banco de habilidades (4, 5 ou 6 conforme as estrelas). */
   abilities: number[];
   style: EstiloId;
+  foot: Pe;
   personality: Personalidade;
   /** 0-100 — fôlego atual. */
   energy: number;
@@ -103,6 +108,8 @@ export interface Club {
   baseInvest: number;
   /** Investidores que ficam com uma fatia das vendas. */
   investors: Investor[];
+  /** Pontos dos últimos 5 jogos (3/1/0) — o "momento" do time. */
+  form?: number[];
 }
 
 export interface Investor {
@@ -309,10 +316,15 @@ export interface Competition {
 
 // ---------- Escalação / partida ----------
 
-export type Formacao = '4-4-2' | '4-3-3' | '3-5-2' | '4-5-1' | '5-3-2' | '4-2-3-1';
+/** Id da formação (padrão, ex.: '4-3-3', ou personalizada, ex.: 'custom-1'). */
+export type Formacao = string;
 
 export interface Lineup {
   formation: Formacao;
+  /** Cópia do esquema quando a formação é personalizada. */
+  esquema?: Esquema;
+  /** Ordem manual dos titulares nas vagas da formação (vaga → jogador). */
+  slots?: number[];
   tactic: TaticaId;
   starters: number[];
   bench: number[];
@@ -364,6 +376,8 @@ export interface GameState {
   saveSlot?: number;
   /** A carreira foi alterada pelo modo editor. */
   edited?: boolean;
+  /** Formações criadas pelo técnico. */
+  customFormations?: Esquema[];
   /** Nota de desempenho da última temporada (patrocínios e investidores). */
   lastPerformance?: number;
   /** Patrocinadores do clube do usuário. */

@@ -4,6 +4,7 @@
 
 import { del, get, set } from 'idb-keyval';
 import { SAVE_VERSION } from './season';
+import { migratePlayers } from './players';
 import type { GameState } from './types';
 import type { World } from './world';
 
@@ -43,6 +44,7 @@ export async function loadGame(slot: number): Promise<GameState | null> {
     const s = (await get(slotKey(slot))) as GameState | undefined;
     if (!s || s.version !== SAVE_VERSION) return null;
     s.saveSlot = slot;
+    migratePlayers(s.players);
     return s;
   } catch {
     return null;
@@ -76,7 +78,9 @@ export async function deleteSave(slot: number): Promise<void> {
 export async function loadEditorWorld(): Promise<World | null> {
   try {
     const w = (await get(EDITOR_KEY)) as { version: number; world: World } | undefined;
-    return w && w.version === SAVE_VERSION ? w.world : null;
+    if (!w || w.version !== SAVE_VERSION) return null;
+    migratePlayers(w.world.players);
+    return w.world;
   } catch {
     return null;
   }

@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { experienceLabel } from '../../engine/coach';
 import { ESTILOS, TATICAS, execucaoTatica, taticaById, type TaticaId } from '../../engine/data/estilos';
 import { HABILIDADES } from '../../engine/data/habilidades';
-import { BENCH_SIZE, FORMACOES, autoLineup } from '../../engine/lineup';
-import { POS_ORDER, STAR_LABEL } from '../../engine/players';
+import { CATEGORIA_LABEL, FORMACOES_PADRAO, esquemaOf, type CategoriaFormacao } from '../../engine/data/formacoes';
+import { BENCH_SIZE, assignSlots, autoLineup } from '../../engine/lineup';
+import { PE_LABEL, POS_ORDER, STAR_LABEL } from '../../engine/players';
 import { Rng } from '../../engine/rng';
 import { squadOf } from '../../engine/season';
 import { loanOut, toggleForSale } from '../../engine/transfers';
-import type { Formacao, Player } from '../../engine/types';
+import type { Player } from '../../engine/types';
+import { Pitch } from '../components/Pitch';
+import { FormationEditor } from './FormationEditor';
 import { investFactor, legendChance, promoteYouth, releaseYouth } from '../../engine/youth';
 import { Flag } from '../components/Flag';
 import { useLoadedGame } from '../game';
@@ -50,6 +53,7 @@ export function PlayerRow({ p, role, onClick, year, hideResp }: { p: Player; rol
         </div>
         <div className="p-stats">
           <span>I: {p.age}</span>
+          <span title={PE_LABEL[p.foot]}>Pé: {p.foot}</span>
           <span>E: {Math.round(p.energy)}%</span>
           <span><b>V: {formatMoney(p.value).replace('$', '')}</b></span>
           <span>S: {formatMoney(p.salary).replace('$', '')}</span>
@@ -83,6 +87,7 @@ function PlayerDetails({ p, year }: { p: Player; year: number }) {
         <span className="k">Classe</span><span><Stars n={p.stars} cap={p.starCap} /> {STAR_LABEL[p.stars]}{p.legend ? ' · JOIA LENDÁRIA' : ''}</span>
         <span className="k">Força / potencial</span><span>{Math.round(p.force)} / {p.age <= 23 ? Math.round(p.potential) : '—'}</span>
         <span className="k">Estilo de jogo</span><span className="gold">{est.nome}</span>
+        <span className="k">Pé dominante</span><span>{PE_LABEL[p.foot]}</span>
       </div>
       <p className="small muted" style={{ margin: '0 0 6px' }}>{est.descricao}</p>
       <h3>Habilidades ({p.abilities.length})</h3>
@@ -114,25 +119,78 @@ function PlayerDetails({ p, year }: { p: Player; year: number }) {
   );
 }
 
+const ORDEM_CATEGORIAS: CategoriaFormacao[] = ['ofensiva', 'contra-ataque', 'posse', 'equilibrada', 'defensiva'];
+
 function TacticPanel() {
   const { state, update } = useLoadedGame();
-  const { formation, tactic, starters } = state.lineup;
+  const { tactic, starters } = state.lineup;
+  const [editando, setEditando] = useState(false);
+  const [selSlot, setSelSlot] = useState<number | null>(null);
+  const esquema = esquemaOf(state.lineup);
   const t = taticaById(tactic);
   const exec = execucaoTatica(t, state.coach.experience);
   const encaixe = starters.filter((id) => t.favorece.includes(state.players[id]?.style)).length;
+  const titulares = starters.map((id) => state.players[id]).filter(Boolean);
+  const slots = assignSlots(titulares, esquema, state.lineup.slots);
+  const noCampo = slots.map((id) => (id >= 0 ? state.players[id] : undefined));
+  const customs = state.customFormations ?? [];
+
+  const trocarFormacao = (id: string) => update((s) => {
+    const custom = (s.customFormations ?? []).find((c) => c.id === id);
+    s.lineup.formation = id;
+    s.lineup.esquema = custom;
+    s.lineup.slots = undefined;
+  });
+  const tocarVaga = (i: number) => {
+    if (selSlot === null) {
+      setSelSlot(i);
+      return;
+    }
+    if (selSlot !== i) {
+      update((s) => {
+        const arr = slots.slice();
+        [arr[selSlot], arr[i]] = [arr[i], arr[selSlot]];
+        s.lineup.slots = arr.every((id) => id >= 0) ? arr : undefined;
+      });
+    }
+    setSelSlot(null);
+  };
+
   return (
     <div className="panel">
       <div className="toolbar" style={{ padding: 0 }}>
         <label>Formação:</label>
-        <select className="sel" value={formation} onChange={(e) => update((s) => { s.lineup.formation = e.target.value as Formacao; })}>
-          {Object.keys(FORMACOES).map((f) => <option key={f}>{f}</option>)}
+        <select className="sel" style={{ flex: 1, minWidth: 0 }} value={esquema.id} onChange={(e) => trocarFormacao(e.target.value)}>
+          {ORDEM_CATEGORIAS.map((c) => (
+            <optgroup key={c} label={CATEGORIA_LABEL[c]}>
+              {FORMACOES_PADRAO.filter((f) => f.categoria === c).map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+            </optgroup>
+          ))}
+          {customs.length > 0 && (
+            <optgroup label="Minhas formações">
+              {customs.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+            </optgroup>
+          )}
         </select>
-        <span className="grow" />
-        <button className="btn small" onClick={() => update((s) => { s.lineup = autoLineup(squadOf(s, s.userClubId), s.lineup.formation, new Set(), s.lineup.tactic); })}>
+      </div>
+      <div className="small muted" style={{ marginTop: 4 }}>
+        <b className="gold">{esquema.custom ? 'Personalizada' : CATEGORIA_LABEL[esquema.categoria]}</b> · {esquema.descricao}
+      </div>
+      <Pitch esquema={esquema} players={noCampo} selected={selSlot} onSlotClick={tocarVaga} />
+      <div className="pitch-legend">
+        <span><b style={{ background: 'var(--green-2)' }} />encaixe ideal</span>
+        <span><b style={{ background: 'var(--gold)' }} />pé/lado trocado</span>
+        <span><b style={{ background: 'var(--red)' }} />fora de posição</span>
+      </div>
+      <p className="small muted" style={{ margin: '4px 0' }}>Toque em dois jogadores do campo para trocar as posições. A letra amarela é o pé (D, E ou A).</p>
+      <div className="btn-row">
+        <button className="btn small" onClick={() => setEditando(true)}>Editar formação</button>
+        <button className="btn small" onClick={() => update((s) => { s.lineup = autoLineup(squadOf(s, s.userClubId), esquemaOf(s.lineup), new Set(), s.lineup.tactic); })}>
           Escalar automático
         </button>
+        {state.lineup.slots && <button className="btn small" onClick={() => update((s) => { s.lineup.slots = undefined; })}>Posições automáticas</button>}
       </div>
-      <div className="toolbar" style={{ padding: '8px 0 4px' }}>
+      <div className="toolbar" style={{ padding: '10px 0 4px' }}>
         <label>Estilo de jogo:</label>
         <select className="sel" style={{ flex: 1 }} value={tactic} onChange={(e) => update((s) => { s.lineup.tactic = e.target.value as TaticaId; })}>
           {TATICAS.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
@@ -146,6 +204,7 @@ function TacticPanel() {
       {t.favorece.length > 0 && (
         <div className="small muted" style={{ marginTop: 4 }}>Favorece: {[...new Set(t.favorece.map((id) => ESTILOS[id].nome))].join(', ')}</div>
       )}
+      {editando && <FormationEditor onClose={() => setEditando(false)} />}
     </div>
   );
 }
@@ -186,11 +245,13 @@ export function Squad() {
 
   const setRole = (id: number, role: 'titular' | 'reserva' | 'fora', swapWith?: number) => update((s) => {
     const l = s.lineup;
+    if (swapWith === undefined) l.slots = undefined;
     l.starters = l.starters.filter((x) => x !== id);
     l.bench = l.bench.filter((x) => x !== id);
     if (role === 'titular') {
       if (swapWith !== undefined) {
         l.starters = l.starters.map((x) => (x === swapWith ? id : x));
+        if (l.slots) l.slots = l.slots.map((x) => (x === swapWith ? id : x));
         l.bench = [swapWith, ...l.bench].slice(0, BENCH_SIZE);
       } else l.starters.push(id);
     } else if (role === 'reserva') {

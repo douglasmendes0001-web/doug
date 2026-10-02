@@ -130,18 +130,40 @@ export function compOf(state: GameState, fx: Fixture) {
 
 // ---------------- Preparação da partida ----------------
 
-const FORMACOES_IA: Formacao[] = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '4-5-1'];
+// A IA escolhe formações coerentes com o tamanho do clube.
+const FORMACOES_FORTES: Formacao[] = ['4-3-3', '4-2-3-1', '4-2-1-3', '4-1-2-1-2', '3-4-2-1', '4-3-3-f9', '4-4-2'];
+const FORMACOES_FRACAS: Formacao[] = ['4-4-2', '4-1-4-1', '5-3-2', '5-4-1', '5-2-1-2', '4-5-1', '4-4-1-1', '3-5-2'];
+
+/** Momento do time (-1 a 1) pelos pontos dos últimos jogos. */
+export function formScore(club: Club): number {
+  const f = club.form ?? [];
+  if (f.length < 2) return 0;
+  const avg = f.reduce((a, b) => a + b, 0) / f.length;
+  return clamp((avg - 1.4) / 1.4, -1, 1);
+}
+
+/** Clima com diretoria e torcida do usuário (-1 pressão, 1 confiança). */
+export function boardPressure(state: GameState): number {
+  const conf = (state.coach.confDiretoria + state.coach.confTorcida) / 2;
+  return clamp((conf - 50) / 40, -1, 1);
+}
+
+function pushForm(club: Club, pts: number) {
+  club.form = [...(club.form ?? []), pts].slice(-5);
+}
 
 const TATICAS_FORTES: TaticaId[] = ['posse', 'pressao', 'tiki', 'gegen', 'total', 'pontas', 'equilibrado'];
 const TATICAS_FRACAS: TaticaId[] = ['retranca', 'contra', 'catenaccio', 'ligacao', 'aereo', 'equilibrado', 'contra'];
 
 function aiTeam(state: GameState, club: Club): TeamContext {
   const squad = squadOf(state, club.id);
-  const formation = FORMACOES_IA[club.id % FORMACOES_IA.length];
+  const lista = club.reputation >= 60 ? FORMACOES_FORTES : FORMACOES_FRACAS;
+  const formation = lista[(club.id * 3) % lista.length];
   const list = club.reputation >= 60 ? TATICAS_FORTES : TATICAS_FRACAS;
   const tactic = list[(club.id * 7) % list.length];
   return {
     club, squad, lineup: autoLineup(squad, formation, new Set(), tactic), coachExperience: clamp(35 + club.reputation * 0.45, 20, 90), isUser: false,
+    form: formScore(club),
   };
 }
 
@@ -155,6 +177,7 @@ function userTeam(state: GameState): TeamContext {
   for (const m of state.messages) if (m.kind === 'pedido-jogar' && m.playerId !== undefined && m.resolved !== 'vender') eager.add(m.playerId);
   return {
     club, squad, lineup: repaired.lineup, coachExperience: state.coach.experience, coachAge: state.coach.age, isUser: true, eager,
+    form: formScore(club), pressure: boardPressure(state),
   };
 }
 
@@ -172,7 +195,8 @@ export function prepareMatch(state: GameState, fx: Fixture, rng: Rng): PreparedM
   const weather = generateWeather(rng, venue, slotMonth(state.year, fx.slot));
   const isUserHome = fx.home === state.userClubId;
   const isUserAway = fx.away === state.userClubId;
-  let crowd = fx.neutral ? 0 : home.reputation / 100;
+  // Torcida mandante: tamanho do clube e do estádio.
+  let crowd = fx.neutral ? 0 : (home.reputation / 100) * (0.7 + 0.3 * Math.min(1, home.stadium.capacity / 50000));
   let attendance: number | undefined;
   let revenue: number | undefined;
   if (isUserHome && !fx.neutral) {
@@ -211,6 +235,8 @@ export function applyMatchOutcome(state: GameState, fx: Fixture, sim: MatchSim, 
   fx.temperature = sim.ctx.weather.temperature;
   fx.scorers = sim.scorers.map((s) => ({ clubId: s.side === 0 ? fx.home : fx.away, playerId: s.playerId, minute: s.minute, assistId: s.assistId }));
   recordResult(state, fx);
+  pushForm(state.clubs[fx.home], hg > ag ? 3 : hg === ag ? 1 : 0);
+  pushForm(state.clubs[fx.away], ag > hg ? 3 : hg === ag ? 1 : 0);
 
   sim.sides.forEach((side) => {
     const club = side.ctx.club;

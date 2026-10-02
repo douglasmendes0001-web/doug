@@ -9,7 +9,8 @@
 import { ESTILOS, execucaoTatica, modsEfetivos, taticaById, type EstiloId, type TaticaId } from './data/estilos';
 import { HABILIDADES, type CondicaoHabilidade, type EfeitoHabilidade } from './data/habilidades';
 import { PAISES } from './data/paises';
-import { assignPositions, MAX_SUBS, positionFit } from './lineup';
+import { esquemaMods, esquemaOf, type SlotFormacao } from './data/formacoes';
+import { assignSlots, MAX_SUBS, positionFit, sideFit } from './lineup';
 import { setorOf } from './players';
 import { clamp, type Rng } from './rng';
 import type { Club, Lineup, Player, Pos } from './types';
@@ -24,6 +25,10 @@ export interface TeamContext {
   isUser: boolean;
   /** Jogadores que pediram para jogar ou receberam promessa (entram motivados). */
   eager?: Set<number>;
+  /** Momento do time (-1 a 1), pelos últimos jogos. */
+  form?: number;
+  /** Clima com diretoria e torcida (-1 = pressão total, 1 = confiança total). Só para o usuário. */
+  pressure?: number;
 }
 
 export interface MatchContext {
@@ -67,6 +72,12 @@ interface AbilityRef {
 export interface OnField {
   p: Player;
   pos: Pos;
+  /** Vaga da formação (lado e profundidade). */
+  slot: SlotFormacao;
+  /** Encaixe do pé dominante com o lado da vaga. */
+  sideF: number;
+  /** Efeito da pressão da torcida sobre o jogador (≤ 1). */
+  press: number;
   /** Impacto da substituição (-1 a 1). */
   mod: number;
   injured: boolean;
@@ -114,6 +125,10 @@ export interface SideState {
   /** Amarelos recebidos na partida por jogador. */
   yellows: Map<number, number>;
   hotness: number;
+  /** Modificadores do esquema (largura → cruzamentos, meio central → posse). */
+  formMods: { cruzamentos: number; posse: number };
+  /** Intensidade de pressão de torcida sentida neste momento (0 a ~1,25). */
+  pressureLevel: number;
 }
 
 const BASE_DRAIN = 0.42;
@@ -127,6 +142,15 @@ const STAR_MULT = [1, 0.99, 1, 1.015, 1.05, 1.08, 1.12, 1.17];
 /** Comprime razões de força: 1,5 → ~1,45; 2 → ~1,74; 5 → ~2,14. */
 export function softRatio(r: number): number {
   return Math.exp(RATIO_CAP * Math.tanh(Math.log(Math.max(1e-6, r)) / RATIO_CAP));
+}
+
+/** Quanto a pressão da torcida afeta o jogador: jovens e temperamentais sentem mais; líderes e craques, menos. */
+export function pressureSusceptibility(p: Player): number {
+  let s = p.age < 23 ? 1.5 : p.age >= 30 ? 0.6 : 1;
+  const pers: Record<string, number> = { lider: 0.5, tranquilo: 0.7, profissional: 0.85, ambicioso: 1, temperamental: 1.4 };
+  s *= pers[p.personality] ?? 1;
+  if (p.stars >= 5) s *= 0.6;
+  return s;
 }
 
 /** Fator das probabilidades de estilo: 1★ = 0,8 … 7★ = 2,0. */
@@ -160,7 +184,8 @@ export class MatchSim {
   private buildSide(t: TeamContext, isHome: boolean): SideState {
     const byId = new Map(t.squad.map((p) => [p.id, p]));
     const starters = t.lineup.starters.map((id) => byId.get(id)).filter((p): p is Player => !!p);
-    const posMap = assignPositions(starters, t.lineup.formation);
+    const esquema = esquemaOf(t.lineup);
+    const slotIds = assignSlots(starters, esquema, t.lineup.slots);
     const hotness = PAISES[t.club.country].hotness;
     // Cada time sente a altitude da sede em relação à da própria cidade.
     const gap = altitudeGap(this.ctx.venue.altitude, t.club.altitude);
@@ -169,12 +194,21 @@ export class MatchSim {
     const tatica = taticaById(t.lineup.tactic);
     const execucao = execucaoTatica(tatica, t.coachExperience);
     const mods = modsEfetivos(tatica, execucao);
-    const teamMult = homeBoost * weatherTechnique(this.ctx.weather.clima, hotness) * (1 - 0.025 * gap) * coachFactor * mods.rendimento;
+    // Momento do time e clima com diretoria/torcida: confiança rende, pressão trava.
+    const form = clamp(t.form ?? 0, -1, 1);
+    const pressure = clamp(t.pressure ?? 0, -1, 1);
+    const momento = (1 + 0.025 * form) * (pressure >= 0 ? 1 + 0.015 * pressure : 1 + 0.03 * pressure);
+    const teamMult = homeBoost * weatherTechnique(this.ctx.weather.clima, hotness) * (1 - 0.025 * gap) * coachFactor * mods.rendimento * momento;
     const drainMult = weatherDrain(this.ctx.weather.clima, hotness) * (1 + 0.3 * gap) * mods.desgaste;
     return {
       ctx: t,
       isHome,
-      onField: starters.map((p) => ({ p, pos: posMap.get(p.id) ?? p.pos, mod: 0, injured: false, yellow: 0, enteredAt: 0, ab: abilityRefs(p), mult: new Float64Array(EFEITOS.length).fill(1) })),
+      onField: slotIds.flatMap((id, i) => {
+        const p = byId.get(id);
+        if (!p) return [];
+        const slot = esquema.slots[i];
+        return [{ p, pos: slot.pos, slot, sideF: sideFit(p, slot), press: 1, mod: 0, injured: false, yellow: 0, enteredAt: 0, ab: abilityRefs(p), mult: new Float64Array(EFEITOS.length).fill(1) }];
+      }),
       bench: t.lineup.bench.map((id) => byId.get(id)).filter((p): p is Player => !!p),
       out: new Set(),
       sentOff: new Set(),
@@ -188,6 +222,8 @@ export class MatchSim {
       injuredIds: new Set(),
       yellows: new Map(),
       hotness,
+      formMods: esquemaMods(esquema),
+      pressureLevel: 0,
     };
   }
 
@@ -215,7 +251,14 @@ export class MatchSim {
    * com o tempo de jogo, o placar ou mudanças em campo, então o cache só é
    * refeito quando essa situação muda.
    */
+  private booed = false;
+
   private refreshMinute() {
+    const H = this.sides[0];
+    if (!this.booed && this.half === 2 && H.goals < this.sides[1].goals && this.crowdIntensity() >= 0.45) {
+      this.booed = true;
+      this.push(0, 'info', `Vaias no estádio! A torcida do ${H.ctx.club.short} perde a paciência e o time sente a pressão.`);
+    }
     for (const side of this.sides) {
       const opp = side === this.sides[0] ? this.sides[1] : this.sides[0];
       const diff = side.goals - opp.goals;
@@ -236,7 +279,17 @@ export class MatchSim {
         else side.styles.set(f.p.style, [f]);
       }
       side.leadMult = 1 + 0.005 * Math.min(4, side.counts[E.lead]);
+      // Pressão de torcida: o visitante sente a casa cheia; o mandante sente as vaias quando perde no 2º tempo.
+      const intensity = this.crowdIntensity();
+      side.pressureLevel = side.isHome ? (this.half === 2 && diff < 0 ? 0.5 * intensity : 0) : intensity;
+      for (const f of side.onField) f.press = 1 - 0.03 * side.pressureLevel * pressureSusceptibility(f.p);
     }
+  }
+
+  /** Intensidade da torcida mandante (lotação x humor), maior em jogos grandes. */
+  crowdIntensity(): number {
+    if (this.ctx.neutral) return 0;
+    return clamp(this.ctx.crowd * (this.ctx.bigGame ? 1.25 : 1), 0, 1.25);
   }
 
   /** Probabilidade de um estilo disparar: base x estrelas x fôlego x afinidade com a tática. */
@@ -258,7 +311,7 @@ export class MatchSim {
     const ritmo = 0.95 + 0.07 * (p.oportunidade / 100);
     const sub = 1 + 0.12 * f.mod;
     const inj = f.injured ? 0.6 : 1;
-    return p.force * (STAR_MULT[p.stars] ?? 1) * fitness * moral * ritmo * positionFit(p.pos, f.pos) * side.teamMult * side.leadMult * sub * inj;
+    return p.force * (STAR_MULT[p.stars] ?? 1) * fitness * moral * ritmo * positionFit(p.pos, f.pos) * f.sideF * f.press * side.teamMult * side.leadMult * sub * inj;
   }
 
   private sector(side: SideState) {
@@ -283,11 +336,14 @@ export class MatchSim {
         case 'VOL':
           def += 0.5 * e * D; mid += 0.6 * e * P; att += 0.1 * e;
           break;
-        case 'MEI':
-          def += 0.15 * e; mid += e * P; att += 0.6 * e * A;
+        case 'MEI': {
+          // Meia avançado (camisa 10, falso 9) ataca mais; meia recuado ajuda a marcar.
+          const y = f.slot.y;
+          def += 0.15 * e * (y < 50 ? 2 : 1); mid += e * P; att += 0.6 * e * A * (y >= 66 ? 1.3 : y < 50 ? 0.75 : 1);
           break;
+        }
         case 'ATA':
-          mid += 0.25 * e * (f.p.style === 'ata_segundo' ? 1.4 : 1); att += e * A;
+          mid += 0.25 * e * (f.p.style === 'ata_segundo' ? 1.4 : 1) * (f.slot.y < 82 ? 1.3 : 1); att += e * A;
           break;
       }
     }
@@ -320,6 +376,10 @@ export class MatchSim {
     const before = this.events.length;
     if (this.minute === 0) {
       this.push(-1, 'info', 'Começa a partida!');
+      const I = this.crowdIntensity();
+      if (I >= 0.6) {
+        this.push(0, 'info', `Caldeirão! A torcida do ${this.sides[0].ctx.club.short} não para de cantar e pressiona o ${this.sides[1].ctx.club.short}.`);
+      }
     }
     this.minute++;
     this.refreshMinute();
@@ -387,7 +447,7 @@ export class MatchSim {
     const sh = this.sector(H);
     const sa = this.sector(A);
     const veloz = (s: SideState) => 1 + this.withStyle(s, 'mei_veloz').reduce((acc, f) => acc + this.styleP(s, f, 0.04), 0);
-    const mr = Math.pow(softRatio(sh.mid / Math.max(1, sa.mid)), 0.8) * (H.mods.posse * veloz(H)) / (A.mods.posse * veloz(A));
+    const mr = Math.pow(softRatio(sh.mid / Math.max(1, sa.mid)), 0.8) * (H.mods.posse * H.formMods.posse * veloz(H)) / (A.mods.posse * A.formMods.posse * veloz(A));
     const pHome = mr / (mr + 1);
     const attIdx: 0 | 1 = rng.next() < pHome ? 0 : 1;
     this.sides[attIdx].posse++;
@@ -409,6 +469,8 @@ export class MatchSim {
     // Time que perde no fim pressiona mais.
     const diff = att.goals - def.goals;
     if (this.half === 2 && this.minute >= 75 && diff < 0) chanceP *= 1.15;
+    // A torcida da casa empurra o time no fim quando não está ganhando.
+    if (att.isHome && this.half === 2 && this.minute >= 75 && diff <= 0) chanceP *= 1 + 0.12 * this.crowdIntensity();
     // Menos jogadores em campo = menos chances.
     chanceP *= att.onField.length / 11;
     chanceP = clamp(chanceP, 0.03, 0.25);
@@ -443,8 +505,18 @@ export class MatchSim {
 
   /** Lateral visionário chega ao fundo e cruza: chance de cabeça. */
   private crossAttempt(attIdx: 0 | 1, att: SideState, def: SideState, gkEff: number) {
+    // Jogadores abertos também cruzam; com o pé "certo" para o lado, cruzam mais.
+    for (const f of att.onField) {
+      if (f.slot.lado === 'C' || f.p.style === 'lat_visionario' || f.pos === 'G' || f.pos === 'ZG') continue;
+      const p = 0.0035 * att.formMods.cruzamentos * att.mods.cruzamentos * f.mult[E.cross] * (f.sideF < 1 ? 0.6 : 1);
+      if (this.rng.next() < p) {
+        if (this.rng.chance(0.3)) this.push(attIdx, 'chance', `${f.p.name} cruza da ${f.slot.lado === 'E' ? 'esquerda' : 'direita'}!`, f.p.id);
+        this.chance(attIdx, att, def, gkEff, true, f);
+        return;
+      }
+    }
     for (const f of this.withStyle(att, 'lat_visionario')) {
-      const p = this.styleP(att, f, 0.011) * att.mods.cruzamentos * f.mult[E.cross];
+      const p = this.styleP(att, f, 0.011) * att.mods.cruzamentos * att.formMods.cruzamentos * f.mult[E.cross] * (f.sideF < 1 ? 0.6 : 1);
       if (this.rng.next() < p) {
         if (this.rng.chance(0.5)) this.push(attIdx, 'estilo', `${f.p.name} (Visionário) chega ao fundo e cruza na área!`, f.p.id);
         this.chance(attIdx, att, def, gkEff, true, f);
@@ -640,7 +712,7 @@ export class MatchSim {
     if (side.out.has(inId)) return { ok: false, error: 'Esse jogador já saiu do jogo.' };
 
     const mod = this.substitutionImpact(side, inP);
-    side.onField = side.onField.map((f) => (f === out ? { p: inP, pos: out.pos, mod, injured: false, yellow: 0, enteredAt: this.minute, ab: abilityRefs(inP), mult: new Float64Array(EFEITOS.length).fill(1) } : f));
+    side.onField = side.onField.map((f) => (f === out ? { p: inP, pos: out.pos, slot: out.slot, sideF: sideFit(inP, out.slot), press: out.press, mod, injured: false, yellow: 0, enteredAt: this.minute, ab: abilityRefs(inP), mult: new Float64Array(EFEITOS.length).fill(1) } : f));
     side.bench = side.bench.filter((p) => p.id !== inId);
     side.out.add(outId);
     side.subsUsed++;

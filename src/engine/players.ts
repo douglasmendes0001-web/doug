@@ -4,8 +4,8 @@ import { ESTILOS_POR_POS } from './data/estilos';
 import { HABILIDADES, HABILIDADES_POR_POS, type Habilidade } from './data/habilidades';
 import { ESTRANGEIROS } from './data/paises';
 import { namePool } from './data/nomes';
-import { clamp, type Rng } from './rng';
-import type { CountryCode, Personalidade, Player, Pos } from './types';
+import { Rng as RngCtor, clamp, type Rng } from './rng';
+import type { CountryCode, Pe, Personalidade, Player, Pos } from './types';
 
 /** Composição padrão de um elenco de 24 jogadores. */
 export const SQUAD_TEMPLATE: Pos[] = [
@@ -126,6 +126,7 @@ export function createPlayer(
     legend: stars >= 6 || undefined,
     abilities: [],
     style: rng.pick(ESTILOS_POR_POS[pos]),
+    foot: rollFoot(rng, pos),
     personality: rng.weighted(PERSONALIDADES, ([, w]) => w)[0],
     energy: 100,
     respeito: 65,
@@ -148,6 +149,16 @@ export function createPlayer(
   return p;
 }
 
+/** Pé dominante coerente com a posição (laterais esquerdos tendem a ser canhotos). */
+export function rollFoot(rng: Rng, pos: Pos): Pe {
+  const r = rng.next();
+  if (pos === 'LE') return r < 0.72 ? 'E' : r < 0.87 ? 'A' : 'D';
+  if (pos === 'LD') return r < 0.82 ? 'D' : r < 0.92 ? 'A' : 'E';
+  return r < 0.72 ? 'D' : r < 0.94 ? 'E' : 'A';
+}
+
+export const PE_LABEL: Record<Pe, string> = { D: 'Destro', E: 'Canhoto', A: 'Ambidestro' };
+
 export function abilityNames(p: Player): string[] {
   return p.abilities.map((id) => HABILIDADES[id]?.nome ?? '?');
 }
@@ -163,4 +174,11 @@ export function setorOf(pos: Pos): 'GOL' | 'DEF' | 'MEI' | 'ATA' {
   if (pos === 'LD' || pos === 'LE' || pos === 'ZG') return 'DEF';
   if (pos === 'VOL' || pos === 'MEI') return 'MEI';
   return 'ATA';
+}
+
+/** Saves antigos: jogadores sem pé dominante recebem um coerente com a posição. */
+export function migratePlayers(players: Player[]) {
+  for (const p of players) {
+    if (!p.foot) p.foot = rollFoot(new RngCtor(p.id * 7919 + 13), p.pos);
+  }
 }

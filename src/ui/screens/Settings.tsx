@@ -4,8 +4,8 @@ import { autoSaveMode, useLoadedGame } from '../game';
 import { CareerEditor } from './CareerEditor';
 
 const AUTOSAVE: { id: AutoSave; label: string; desc: string }[] = [
-  { id: 'partida', label: 'A cada partida', desc: 'Salva automaticamente ao fim de cada jogo do seu time.' },
-  { id: 'sempre', label: 'Sempre', desc: 'Salva a cada alteração (escalação, mensagens, mercado...).' },
+  { id: 'partida', label: 'A cada partida', desc: 'Salva ao fim de cada jogo do seu time e também quando o app vai para segundo plano.' },
+  { id: 'sempre', label: 'Sempre', desc: 'Salva a cada alteração (escalação, mensagens, mercado...) e em segundo plano.' },
   { id: 'manual', label: 'Manual', desc: 'Só salva quando você tocar em "Salvar agora".' },
 ];
 

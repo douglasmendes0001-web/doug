@@ -6,7 +6,7 @@ import { PAISES } from '../../engine/data/paises';
 import {
   EDITOR_SEED, IDADE_NOVO_JOGADOR, addPlayer, editClub, editPlayer, recalcClubForce, removePlayer, toggleAbility,
 } from '../../engine/editor';
-import { POS_ORDER, STAR_LABEL, abilityCount } from '../../engine/players';
+import { PE_LABEL, POS_ORDER, STAR_LABEL, abilityCount } from '../../engine/players';
 import { deleteEditorWorld, loadEditorWorld, saveEditorWorld } from '../../engine/save';
 import type { CountryCode, Player, Pos } from '../../engine/types';
 import { createWorld, type World } from '../../engine/world';
@@ -70,6 +70,14 @@ function PlayerEditor({ world, id, onChange, onClose }: { world: World; id: numb
         </div>
         <NumField label="Potencial (até onde pode evoluir)" value={p.potential} min={1} max={135} onChange={(v) => edit({ potential: v })} />
 
+        <div className="form-field">
+          <label>Pé dominante</label>
+          <div className="choice-row">
+            {(['D', 'E', 'A'] as const).map((ft) => (
+              <button key={ft} className={`choice ${p.foot === ft ? 'on' : ''}`} onClick={() => edit({ foot: ft })}>{PE_LABEL[ft]}</button>
+            ))}
+          </div>
+        </div>
         <div className="form-field">
           <label>Estrelas: {p.stars} — {STAR_LABEL[p.stars]} ({max} habilidades)</label>
           <div className="choice-row">

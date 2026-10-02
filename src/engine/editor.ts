@@ -5,7 +5,7 @@ import { ESTILOS_POR_POS, type EstiloId } from './data/estilos';
 import { HABILIDADES } from './data/habilidades';
 import { abilityCount, createPlayer, marketValue, monthlySalary, syncAbilities } from './players';
 import { Rng, clamp } from './rng';
-import type { Club, CountryCode, Player, Pos } from './types';
+import type { Club, CountryCode, Pe, Player, Pos } from './types';
 import type { World } from './world';
 
 export const EDITOR_SEED = 20260101;
@@ -25,6 +25,7 @@ export interface PlayerEdit {
   stars?: number;
   style?: EstiloId;
   pos?: Pos;
+  foot?: Pe;
 }
 
 /** Aplica uma edição validando os limites. Mudar a posição troca estilo e habilidades. */
@@ -33,6 +34,7 @@ export function editPlayer(world: World, id: number, e: PlayerEdit, rng = new Rn
   if (!p) return;
   if (e.name !== undefined) p.name = e.name.trim().slice(0, 28) || p.name;
   if (e.nat !== undefined) p.nat = e.nat;
+  if (e.foot !== undefined) p.foot = e.foot;
   if (e.age !== undefined) p.age = clamp(Math.round(e.age), 15, 45);
   if (e.force !== undefined) p.force = clamp(Math.round(e.force), 1, 135);
   if (e.potential !== undefined) p.potential = clamp(Math.round(e.potential), 1, 135);

@@ -2,7 +2,7 @@
 // Toda alteração passa por `update`, que força a renderização. O salvamento
 // segue a opção do jogador: a cada alteração, ao fim de cada partida ou manual.
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { saveGame } from '../engine/save';
 import type { AutoSave, GameState } from '../engine/types';
 
@@ -36,6 +36,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [lastSaved, setLastSaved] = useState<number | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
   const toastTimer = useRef<number | undefined>(undefined);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
 
   const saveNow = useCallback(async () => {
     window.clearTimeout(saveTimer.current);
@@ -50,6 +52,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
     saveTimer.current = window.setTimeout(() => {
       saveNow().catch(() => undefined);
     }, 800);
+  }, [saveNow]);
+
+  // Salva em segundo plano: quando o app é minimizado, a tela apaga ou a aba
+  // é fechada (no Android o WebView dispara 'visibilitychange' ao pausar).
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden' || !document.visibilityState) {
+        if (ref.current && dirtyRef.current && autoSaveMode(ref.current) !== 'manual') saveNow().catch(() => undefined);
+      }
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onHide);
+    };
   }, [saveNow]);
 
   const api = useMemo<GameApi>(() => ({

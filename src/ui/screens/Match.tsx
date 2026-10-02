@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ESTILOS, execucaoTatica, taticaById } from '../../engine/data/estilos';
+import { esquemaOf } from '../../engine/data/formacoes';
 import { MAX_SUBS } from '../../engine/lineup';
 import { MatchSim, type MatchEvent } from '../../engine/match';
 import { Rng } from '../../engine/rng';
-import { applyMatchOutcome, compOf, playSlot, prepareMatch, simulateFixture, type SlotReport } from '../../engine/season';
+import { applyMatchOutcome, boardPressure, compOf, formScore, playSlot, prepareMatch, simulateFixture, type SlotReport } from '../../engine/season';
 import { fixtureRoundLabel } from '../../engine/standings';
-import type { Fixture, Player } from '../../engine/types';
+import type { Fixture, GameState, Player } from '../../engine/types';
 import { CLIMA_LABEL, altitudeGap } from '../../engine/weather';
 import { useLoadedGame } from '../game';
 
@@ -20,6 +21,34 @@ function readiness(p: Player): { label: string; cls: string } {
   if (r > 0.2) return { label: 'Pronto', cls: 'high' };
   if (r > -0.15) return { label: 'Regular', cls: 'mid' };
   return { label: 'Sem ritmo', cls: 'low' };
+}
+
+function formLabel(form: number[] | undefined): string {
+  if (!form?.length) return 'sem jogos';
+  return form.map((p) => (p === 3 ? 'V' : p === 1 ? 'E' : 'D')).join(' ');
+}
+
+/** Momento dos times, pressão de diretoria/torcida e o peso da torcida no estádio. */
+function AmbientePanel({ state, fixture, crowd, bigGame }: { state: GameState; fixture: Fixture; crowd: number; bigGame: boolean }) {
+  const home = state.clubs[fixture.home];
+  const away = state.clubs[fixture.away];
+  const userHome = fixture.home === state.userClubId;
+  const pressao = boardPressure(state);
+  const intensidade = fixture.neutral ? 0 : Math.min(1.25, crowd * (bigGame ? 1.25 : 1));
+  const torcidaTxt = fixture.neutral ? 'campo neutro: sem pressão de torcida'
+    : intensidade >= 0.8 ? 'caldeirão' : intensidade >= 0.5 ? 'torcida forte' : intensidade >= 0.25 ? 'torcida morna' : 'estádio vazio';
+  return (
+    <div className="kv" style={{ marginTop: 6 }}>
+      <span className="k">Momento {home.short}</span><span>{formLabel(home.form)} ({Math.round(formScore(home) * 100)})</span>
+      <span className="k">Momento {away.short}</span><span>{formLabel(away.form)} ({Math.round(formScore(away) * 100)})</span>
+      <span className="k">Diretoria e torcida com você</span>
+      <span className={pressao < -0.3 ? 'neg' : pressao > 0.3 ? 'pos' : ''}>{pressao < -0.3 ? 'pressão alta: o time pode travar' : pressao > 0.3 ? 'confiança: o time joga solto' : 'neutro'}</span>
+      <span className="k">Torcida do mandante</span>
+      <span className={!userHome && intensidade >= 0.5 ? 'neg' : userHome && intensidade >= 0.5 ? 'pos' : ''}>
+        {torcidaTxt}{!fixture.neutral && (userHome ? ' — empurra seu time' : ' — vai pressionar seus jovens')}
+      </span>
+    </div>
+  );
 }
 
 export function MatchScreen({ fixture, onDone, onBack }: Props) {
@@ -105,12 +134,13 @@ export function MatchScreen({ fixture, onDone, onBack }: Props) {
             <span className="k">Altitude</span><span>{prepared.ctx.venue.altitude.toLocaleString('pt-BR')} m</span>
             {prepared.attendance !== undefined && (<><span className="k">Público esperado</span><span>{prepared.attendance.toLocaleString('pt-BR')}</span></>)}
           </div>
+          <AmbientePanel state={state} fixture={fixture} crowd={prepared.ctx.crowd} bigGame={!!prepared.ctx.bigGame} />
           {gapMe > 0 && <div className="warning small">Ar rarefeito: seu time joga {prepared.ctx.venue.altitude.toLocaleString('pt-BR')} m acima do nível do mar e vai cansar bem mais rápido, principalmente no 2º tempo. Considere poupar os mais velhos e usar as substituições cedo.</div>}
           {prepared.ctx.weather.clima === 'calor' && <div className="warning small" style={{ marginTop: 6 }}>Calor forte: desgaste físico maior, ainda mais para veteranos.</div>}
           {prepared.ctx.weather.clima === 'chuva' && <div className="warning small" style={{ marginTop: 6 }}>Chuva: gramado pesado, jogo mais imprevisível e mais faltas.</div>}
         </div>
         <div className="panel">
-          <h2>Seu time ({state.lineup.formation} · {taticaById(state.lineup.tactic).nome})</h2>
+          <h2>Seu time ({esquemaOf(state.lineup).nome} · {taticaById(state.lineup.tactic).nome})</h2>
           <div className="small">Execução da tática: <b>{Math.round(execucaoTatica(taticaById(state.lineup.tactic), state.coach.experience) * 100)}%</b></div>
           <div className="small">Força média dos titulares: <b>{avg.toFixed(1)}</b></div>
           {tired.length > 0 && <div className="small" style={{ color: '#ff8a80' }}>Cansados: {tired.map((p) => `${p.name} (${Math.round(p.energy)}%)`).join(', ')}</div>}

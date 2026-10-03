@@ -48,3 +48,25 @@ describe('sorteio da história do técnico como jogador', () => {
     expect(SORTEIOS_HISTORIA).toBe(5);
   });
 });
+
+describe('coerência do sorteio', () => {
+  it('clubes grandes nunca ganham Série C ou D (e só raramente a Série B)', () => {
+    const w = createWorld(8);
+    const rng = new Rng(9);
+    const grandes = new Set(w.clubs.filter((c) => prestigioHistorico(c) >= 3).map((c) => c.name));
+    let serieB = 0;
+    let titulosGrandes = 0;
+    for (let i = 0; i < 300; i++) {
+      const pc = sortearCarreira(w.clubs, 'BRA', 'variosClubes', 50, rng, prestigioHistorico);
+      for (const c of pc.clubs) {
+        if (!grandes.has(c.name)) continue;
+        for (const [t, n] of Object.entries(c.titles)) {
+          titulosGrandes += n;
+          expect(t, `${c.name}: ${t}`).not.toMatch(/Série C|Série D/);
+          if (/Série B|2ª Divisão|Primera Nacional|Ascenso|Serie B/.test(t)) serieB += n;
+        }
+      }
+    }
+    expect(serieB / titulosGrandes).toBeLessThan(0.08);
+  });
+});

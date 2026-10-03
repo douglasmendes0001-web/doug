@@ -1,6 +1,7 @@
 import { IDADE_TETO } from '../../engine/career';
 import { CareerCard } from '../components/CareerDraw';
 import { experienceLabel } from '../../engine/coach';
+import { aposentar, pedirDemissao } from '../../engine/endSeason';
 import {
   EXPANSOES, baseTicketPrice, ctUpgradeCost, expandStadium, expansionCost, setTicketPrice, upgradeCT, weeklySalaries,
 } from '../../engine/clubOps';
@@ -60,9 +61,36 @@ export function ClubScreen() {
   );
 }
 
+function DemissaoSheet({ onClose }: { onClose: () => void }) {
+  const { state, update } = useLoadedGame();
+  useBack(onClose, NIVEL.folha);
+  const clube = state.clubs[state.userClubId].name;
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <h2>Pedir demissão</h2>
+        <p className="small">Você vai deixar o {clube}. O que pretende fazer depois?</p>
+        <div className="sheet-actions">
+          <button className="btn primary" onClick={() => { onClose(); update((s) => pedirDemissao(s)); }}>
+            Procurar outro clube<div className="small">veja as propostas que chegarem</div>
+          </button>
+          <button className="btn danger" onClick={() => {
+            if (window.confirm('Encerrar a carreira de técnico e se aposentar? Não dá para voltar atrás.')) { onClose(); update((s) => aposentar(s)); }
+          }}>
+            Aposentar-me<div className="small">fim da carreira, com a arte dos seus jogos, clubes e títulos</div>
+          </button>
+          <button className="btn" onClick={onClose}>Continuar no {clube}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TecnicoTab() {
   const { state, update } = useLoadedGame();
+  const [demissao, setDemissao] = useState(false);
   const c = state.coach;
+  const momentos = (c.momentos ?? []).filter((m) => m.tipo !== 'clube').slice(-6).reverse();
   return (
     <div>
       <div className="panel">
@@ -79,6 +107,14 @@ function TecnicoTab() {
         {c.playerCareer && (
           <>
             <CareerCard pc={c.playerCareer} />
+          </>
+        )}
+        {momentos.length > 0 && (
+          <>
+            <h3>Grandes momentos</h3>
+            {momentos.map((m, i) => (
+              <div key={i} className="small moment-row"><span className="gold">{m.year}</span><span>{m.texto}</span></div>
+            ))}
           </>
         )}
         {!!c.history?.length && (
@@ -105,6 +141,13 @@ function TecnicoTab() {
         </div>
         <p className="small muted">{TREINOS.find((t) => t.id === state.treino)?.desc} O nível do CT multiplica os efeitos.</p>
       </div>
+
+      <div className="panel">
+        <h2>Futuro</h2>
+        <p className="small muted">Pode pedir demissão a qualquer momento: procure outro clube ou encerre a carreira de técnico.</p>
+        <button className="btn danger" onClick={() => setDemissao(true)}>Pedir demissão</button>
+      </div>
+      {demissao && <DemissaoSheet onClose={() => setDemissao(false)} />}
     </div>
   );
 }

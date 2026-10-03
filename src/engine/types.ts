@@ -54,8 +54,16 @@ export interface Player {
   treino: number;
   clubId: number;
   injuredSlots: number;
+  /** Tipo da lesão atual (ex.: "Entorse no tornozelo"). */
+  lesao?: string;
+  /** Total de jogos de suspensão a cumprir (soma de `suspensoes`). */
   suspendedGames: number;
+  /** Jogos de suspensão por competição (id da competição). */
+  suspensoes?: Record<string, number>;
+  /** Amarelos na temporada (todas as competições). */
   yellowCards: number;
+  /** Amarelos pendentes por competição (3 = suspensão; zera depois). */
+  amarelos?: Record<string, number>;
   seasonGoals: number;
   seasonGames: number;
   seasonAssists: number;
@@ -171,6 +179,26 @@ export interface Coach {
   playerCareer?: PlayerCareer;
   /** Passagens como técnico por cada clube. */
   history?: CoachStint[];
+  /** Grandes momentos da carreira (títulos, goleadas, acessos, honrarias, marcos). */
+  momentos?: GrandeMomento[];
+  /** Pediu demissão e está escolhendo um novo clube (ou a aposentadoria). */
+  pediuDemissao?: boolean;
+  /** Ano da aposentadoria: a carreira acabou e o save vira Hall da Fama. */
+  aposentadoEm?: number;
+}
+
+export type TipoMomento = 'estreia' | 'clube' | 'titulo' | 'goleada' | 'acesso' | 'honra' | 'marco' | 'adeus';
+
+export interface GrandeMomento {
+  year: number;
+  tipo: TipoMomento;
+  clubId: number;
+  clubName: string;
+  texto: string;
+  /** Títulos: competição e tipo (para o troféu da arte). */
+  compId?: string;
+  compName?: string;
+  kind?: CompKind;
 }
 
 export interface PlayerCareer {
@@ -440,7 +468,7 @@ export interface GameState {
   /** Classificados para torneios continentais da próxima temporada. */
   qualifications?: Record<string, number[]>;
   financeLog: FinanceEntry[];
-  /** Slot de salvamento (1 a 3). */
+  /** Slot de salvamento (1 a 8). */
   saveSlot?: number;
   /** A carreira foi alterada pelo modo editor. */
   edited?: boolean;

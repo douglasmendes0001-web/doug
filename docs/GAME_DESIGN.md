@@ -7,7 +7,9 @@
   1. Técnico: nome, idade (o aviso de que a idade influencia o jogo aparece na hora), nacionalidade e, a partir de 30 anos, o passado como jogador.
   2. Time: país, liga e clube, com a opção de usar o banco do editor.
   3. Configurações: duração dos tempos, formato do Mundial e slot de save.
-- **Carregar jogo**: 3 slots de carreira, com opção de apagar.
+- **Carregar jogo**: 8 slots de carreira, com opção de apagar. Em Ajustes, "Salvar em outro slot" muda a
+  carreira de slot e deixa o ponto atual no slot antigo como cópia de segurança. Carreiras encerradas
+  aparecem como **Hall da Fama**.
 - **Modo editor**: banco de dados editável e salvo no aparelho, usado nas próximas carreiras. Permite:
   - editar clubes: nome, sigla, cores, estádio, CT, base e caixa;
   - editar jogadores: nome, posição, nacionalidade, idade, força, potencial, estrelas, estilo de jogo e
@@ -41,8 +43,9 @@
 - Bônus da história: experiência `mín(10, títulos de clube) + mín(8, 2 × seleção) +
   mín(6, 2 × prêmios) + 3 (400+ jogos) / 1 (200+ jogos)`, até +25; prestígio até +20.
 - Nacionalidade: jogadores compatriotas começam com +5 de respeito.
-- Experiência inicial (0–100): `(idade − 20) × 1,6` (máx. 50) + ex-jogador 10 + vários clubes 6 /
-  um clube 3 + títulos 12. Um técnico de 20 anos começa com 0.
+- Experiência inicial (0–100): quem **não foi jogador** começa com **10** dos 20 aos 35 anos; depois disso,
+  `10 + (idade − 35) × 1,6` (máx. 50). Ex-jogador (30+, depois de sortear a história): +10, vários clubes
+  +6 / um clube +3, títulos +12 e o bônus da história.
 - A experiência cresce a cada jogo (+0,12, +0,06 extra por vitória), por título (+3) e por temporada (+2).
 
 ### Efeitos da experiência
@@ -399,6 +402,9 @@ Jogo aéreo, Jogo pelas pontas, Ligação direta e Futebol total. Cada tática:
 - São **5 chances**; o usuário escolhe a melhor história. Esgotadas, o jogo avisa: é preciso voltar à
   tela inicial para tentar de novo. Depois do primeiro sorteio, nacionalidade e tipo de carreira travam.
 - Treinar um clube onde foi ídolo como jogador: torcida +15 e elenco +6 de respeito.
+- **Coerência:** os títulos sorteados respeitam a divisão do clube. Gigantes (reputação intercontinental
+  ou mundial) nunca ganham Série C ou D e só raramente uma Série B (rebaixamentos de grandes são raros);
+  os outros clubes ganham títulos da própria divisão ou de uma vizinha.
 
 ## Prestígio internacional dos clubes
 
@@ -462,6 +468,41 @@ Poisson baseado na força dos elencos (top 11 × estrelas). Mostra:
 
 - na **Libertadores** e nas copas: a chance de título e de passar de fase de cada clube;
 - nas ligas: a chance de título, de vaga na Libertadores ou Champions e de rebaixamento.
+
+## Cartões e lesões (regras atuais)
+
+- **Amarelos por competição:** 3 amarelos na mesma competição = 1 jogo de suspensão nela; a contagem zera.
+  Amarelos de competições diferentes não se somam. O jogador "pendurado" (2 amarelos) aparece no elenco.
+- **Dois amarelos no jogo = vermelho:** 1 jogo de suspensão, e esses amarelos não entram na contagem.
+- **Vermelho direto:** 1 jogo (60%), 2 (30%, jogada violenta) ou 3 (10%, agressão).
+- A suspensão é cumprida nos **próximos jogos da mesma competição**; nas outras o jogador segue liberado.
+  Cartões e suspensões zeram na virada da temporada.
+- Quem já tem amarelo joga com mais cuidado (o temperamental, nem tanto). Média de ~2 amarelos por
+  time por jogo e ~1 expulsão a cada 7-8 jogos.
+- **Lesões com tipo e duração:** pancada (0,5-1 semana), estiramento (1-2), lesão muscular na coxa (2-5),
+  panturrilha (2-4), entorse no tornozelo (2-5), adutor (3-6), fratura (6-10), menisco (6-12) e ruptura do
+  ligamento cruzado (26-36 semanas). O CT encurta a recuperação (CT 5: −20%; CT 1: +12%).
+- **Suspenso ou lesionado não é relacionado:** depois de cada dia, e de novo antes do jogo, quem não pode
+  jogar a próxima partida sai do time titular e do banco, e a diretoria avisa os desfalques. A tela de
+  escalação bloqueia a escolha e mostra o motivo.
+
+## Demissão, aposentadoria e Hall da Fama
+
+- Em Clube → Técnico, **Pedir demissão** a qualquer momento: procurar outro clube (aparecem as propostas)
+  ou **se aposentar**. Demitido pela diretoria, o técnico também pode escolher se aposentar.
+- Ao se aposentar aparece a **arte da carreira**: anos de carreira, jogos, vitórias, empates, derrotas,
+  aproveitamento e títulos; as passagens pelos clubes com escudo, anos e honrarias de ídolo/lenda; a
+  galeria de troféus; e os **grandes momentos**.
+- Grandes momentos são registrados durante a carreira: estreia e cada clube novo, títulos, goleadas
+  (4+ gols de diferença), acessos, honrarias de ídolo/lenda, marcas de jogos (100, 250, 500...) e de
+  vitórias, e a despedida.
+- A carreira encerrada fica salva como **Hall da Fama**: em Carregar jogo, "Ver carreira" abre a arte.
+
+## Bandeiras
+
+Desenhadas em SVG com as cores e os elementos reais de cada país (losango e círculo do Brasil, sol de
+maio da Argentina e do Uruguai, listras e estrelas dos EUA, folha de bordo do Canadá, cruzes da
+Inglaterra e da Escócia, crescentes da Turquia e da Tunísia etc.), mostradas num círculo.
 
 ## Simplificações conhecidas (próximas fases)
 

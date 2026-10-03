@@ -61,7 +61,8 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
   const ligas = LIGAS.filter((l) => l.country === country);
   const clubs = world.clubs.filter((c) => c.leagueId === leagueId).sort((a, b) => b.baseForce - a.baseForce);
   const isEx = age >= IDADE_EX_JOGADOR && exPlayer;
-  const coachInput = { name, age, nat, exPlayer: isEx, career, titulosCarreira: careerTotals(pc).total > 0, playerCareer: isEx ? pc : undefined };
+  // Sem história sorteada ainda, a experiência é a de quem não foi jogador.
+  const coachInput = { name, age, nat, exPlayer: isEx && !!pc, career, titulosCarreira: careerTotals(pc).total > 0, playerCareer: isEx ? pc : undefined };
   const sortear = () => {
     if (sorteios.length >= SORTEIOS_HISTORIA) return;
     const rng = new Rng((Date.now() ^ (Math.random() * 1e9)) | 0);

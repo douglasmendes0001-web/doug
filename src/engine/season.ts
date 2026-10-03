@@ -10,13 +10,14 @@ import { homeGate, logFinance, weeklyFinance } from './clubOps';
 import {
   advanceCompetition, knockoutContext, pendingByStage, recordResult, startStage,
 } from './competitions';
+import { AMARELOS_PARA_SUSPENSAO, aplicarCartoes, cumprirSuspensao, sortearLesao, tempoDeLesao, type Expulsao } from './discipline';
 import { endSeason } from './endSeason';
 import { afterUserMatchMessages, confidenceMessages, pushMessage, seasonStartMessages, weeklyPlayerRequests } from './inbox';
 import { autoLineup, repairLineup } from './lineup';
 import { MatchSim, type MatchContext, type TeamContext } from './match';
 import { Rng, clamp } from './rng';
 import { buildSeasonCompetitions } from './seasonSetup';
-import { openStint, pushArt, stintMatch, stintTitle } from './career';
+import { momentosDoJogo, openStint, pushArt, registrarMomento, stintMatch, stintTitle } from './career';
 import { initialSponsors, investorOffer, titleBonus, weeklySponsorIncome } from './sponsors';
 import { contractReminders, weeklyOffers } from './transfers';
 import { weeklyYouthTraining, youthIntake } from './youth';
@@ -162,23 +163,24 @@ function pushForm(club: Club, pts: number) {
 const TATICAS_FORTES: TaticaId[] = ['posse', 'pressao', 'tiki', 'gegen', 'total', 'pontas', 'equilibrado'];
 const TATICAS_FRACAS: TaticaId[] = ['retranca', 'contra', 'catenaccio', 'ligacao', 'aereo', 'equilibrado', 'contra'];
 
-function aiTeam(state: GameState, club: Club): TeamContext {
+function aiTeam(state: GameState, club: Club, compId?: string): TeamContext {
   const squad = squadOf(state, club.id);
   const lista = club.reputation >= 60 ? FORMACOES_FORTES : FORMACOES_FRACAS;
   const formation = lista[(club.id * 3) % lista.length];
   const list = club.reputation >= 60 ? TATICAS_FORTES : TATICAS_FRACAS;
   const tactic = list[(club.id * 7) % list.length];
   return {
-    club, squad, lineup: autoLineup(squad, formation, new Set(), tactic), coachExperience: clamp(35 + club.reputation * 0.45, 20, 90), isUser: false,
+    club, squad, lineup: autoLineup(squad, formation, new Set(), tactic, compId), coachExperience: clamp(35 + club.reputation * 0.45, 20, 90), isUser: false,
     form: formScore(club),
   };
 }
 
-function userTeam(state: GameState): TeamContext {
+function userTeam(state: GameState, compId?: string): TeamContext {
   const club = state.clubs[state.userClubId];
   const squad = squadOf(state, club.id);
-  const repaired = repairLineup(state.lineup, squad);
+  const repaired = repairLineup(state.lineup, squad, compId);
   state.lineup = repaired.lineup;
+  avisarDesfalques(state, repaired.removidos);
   const eager = new Set<number>();
   for (const p of squad) if (p.promiseUntilSlot !== undefined) eager.add(p.id);
   for (const m of state.messages) if (m.kind === 'pedido-jogar' && m.playerId !== undefined && m.resolved !== 'vender') eager.add(m.playerId);
@@ -214,8 +216,8 @@ export function prepareMatch(state: GameState, fx: Fixture, rng: Rng): PreparedM
   }
   return {
     ctx: {
-      home: isUserHome ? userTeam(state) : aiTeam(state, home),
-      away: isUserAway ? userTeam(state) : aiTeam(state, away),
+      home: isUserHome ? userTeam(state, fx.compId) : aiTeam(state, home, fx.compId),
+      away: isUserAway ? userTeam(state, fx.compId) : aiTeam(state, away, fx.compId),
       venue, neutral: fx.neutral, weather, crowd, rng, knockout: knockoutContext(state, fx),
       bigGame: fx.tieId !== undefined || comp.def.kind === 'continental' || comp.def.kind === 'mundial',
     },
@@ -247,29 +249,35 @@ export function applyMatchOutcome(state: GameState, fx: Fixture, sim: MatchSim, 
 
   sim.sides.forEach((side) => {
     const club = side.ctx.club;
+    const isUser = club.id === state.userClubId;
+    // Quem não jogou cumpre a suspensão desta competição (antes dos cartões novos).
+    for (const id of club.playerIds) {
+      const p = state.players[id];
+      if (side.played.has(id)) continue;
+      if (cumprirSuspensao(p, fx.compId)) continue;
+      if (isUser && p.injuredSlots <= 0) {
+        p.oportunidade = Math.max(0, p.oportunidade - 6);
+        p.benchStreak++;
+      }
+    }
     for (const pid of side.played) {
       const p = state.players[pid];
       p.seasonGames++;
       p.oportunidade = Math.min(100, p.oportunidade + 12);
       p.benchStreak = 0;
-      if ((side.yellows.get(pid) ?? 0) === 1) {
-        p.yellowCards++;
-        if (p.yellowCards >= 3) {
-          p.yellowCards = 0;
-          p.suspendedGames += 1;
-        }
-      }
+      const expulsao = side.sentOff.has(pid) ? (side.redDirect.has(pid) ? 'direto' : 'dois-amarelos') : undefined;
+      const pun = aplicarCartoes(p, fx.compId, expulsao ? 0 : side.yellows.get(pid) ?? 0, expulsao, rng);
+      if (isUser && pun.jogos > 0) avisarSuspensao(state, p, fx, pun.jogos, pun.motivo!);
     }
     for (const pid of side.injuredIds) {
-      state.players[pid].injuredSlots = Math.round(rng.int(2, 10) * (1.2 - club.ct * 0.08));
-    }
-    for (const id of club.playerIds) {
-      const p = state.players[id];
-      if (side.played.has(id)) continue;
-      if (p.suspendedGames > 0) p.suspendedGames--;
-      else if (side.ctx.isUser && p.injuredSlots <= 0) {
-        p.oportunidade = Math.max(0, p.oportunidade - 6);
-        p.benchStreak++;
+      const p = state.players[pid];
+      const l = sortearLesao(rng, club.ct);
+      p.injuredSlots = l.slots;
+      p.lesao = l.tipo;
+      if (isUser) {
+        pushMessage(state, 'jogador', `Lesão: ${p.name}`,
+          `Departamento médico: ${p.name} sofreu ${l.tipo.toLowerCase()} e fica fora por ${tempoDeLesao(l.slots)} (${l.slots} dia${l.slots > 1 ? 's' : ''} de jogo). Ele não pode ser relacionado até voltar.`,
+          { playerId: p.id });
       }
     }
   });
@@ -280,6 +288,31 @@ export function applyMatchOutcome(state: GameState, fx: Fixture, sim: MatchSim, 
 
   const userSide = fx.home === state.userClubId ? 0 : fx.away === state.userClubId ? 1 : -1;
   if (userSide >= 0) afterUserMatch(state, fx, sim, userSide as 0 | 1, rng, prepared);
+}
+
+function avisarSuspensao(state: GameState, p: Player, fx: Fixture, jogos: number, motivo: 'amarelos' | Expulsao) {
+  const comp = compOf(state, fx).def.name;
+  const porque = motivo === 'amarelos' ? `recebeu o ${AMARELOS_PARA_SUSPENSAO}º cartão amarelo na competição`
+    : motivo === 'dois-amarelos' ? 'foi expulso com o segundo amarelo'
+    : `foi expulso com vermelho direto${jogos > 1 ? ` e o tribunal deu ${jogos} jogos de gancho` : ''}`;
+  pushMessage(state, 'diretoria', `Suspensão: ${p.name}`,
+    `${comp}: ${p.name} ${porque} e cumpre suspensão de ${jogos} jogo${jogos > 1 ? 's' : ''} nesta competição. Ele não pode ser relacionado nesses jogos; nas outras competições segue liberado.`,
+    { playerId: p.id });
+}
+
+/** Avisa quem saiu da escalação por lesão ou suspensão. */
+function avisarDesfalques(state: GameState, removidos: string[]) {
+  if (!removidos.length) return;
+  pushMessage(state, 'diretoria', 'Escalação ajustada', `Desfalques para o próximo jogo: ${removidos.join(' ')}`);
+}
+
+/** Depois de cada dia: tira da escalação quem não pode jogar o próximo jogo. */
+function ajustarEscalacao(state: GameState) {
+  const fx = nextUserFixture(state);
+  if (!fx) return;
+  const r = repairLineup(state.lineup, squadOf(state, state.userClubId), fx.compId);
+  state.lineup = r.lineup;
+  avisarDesfalques(state, r.removidos);
 }
 
 function afterUserMatch(state: GameState, fx: Fixture, sim: MatchSim, side: 0 | 1, rng: Rng, prepared?: PreparedMatch) {
@@ -298,6 +331,7 @@ function afterUserMatch(state: GameState, fx: Fixture, sim: MatchSim, side: 0 | 
   if (pts === 3) coach.wins++;
   else if (pts === 1) coach.draws++;
   else coach.losses++;
+  momentosDoJogo(state, gf, ga, opp.name, comp.def.name);
   coach.experience = clamp(coach.experience + 0.12 + (pts === 3 ? 0.06 : 0), 0, 100);
 
   // Renda do jogo em casa.
@@ -437,6 +471,8 @@ export function playSlot(state: GameState): SlotReport {
     endSeason(state);
     startSeason(state);
     seasonEnded = true;
+  } else if (!state.coach.fired) {
+    ajustarEscalacao(state);
   }
   return { slot, seasonEnded, finishedComps };
 }
@@ -448,6 +484,7 @@ function onCompetitionFinished(state: GameState, compId: string) {
   if (comp.champion === u) {
     state.coach.titles.push(`${comp.def.name} ${state.year}`);
     stintTitle(state, `${comp.def.name} ${state.year}`);
+    registrarMomento(state, { tipo: 'titulo', texto: `Campeão da ${comp.def.name}`, compId: comp.def.id, compName: comp.def.name, kind: comp.def.kind });
     state.coach.confDiretoria = clamp(state.coach.confDiretoria + 20, 0, 100);
     state.coach.confTorcida = clamp(state.coach.confTorcida + 25, 0, 100);
     state.coach.experience = clamp(state.coach.experience + 3, 0, 100);
@@ -480,7 +517,7 @@ function dailyRecovery(state: GameState) {
     for (const id of club.playerIds) {
       const p = state.players[id];
       p.energy = Math.min(100, p.energy + recuperacao(p, club.ct) + (isUser ? treinoBonus : 0));
-      if (p.injuredSlots > 0) p.injuredSlots--;
+      if (p.injuredSlots > 0 && --p.injuredSlots <= 0) p.lesao = undefined;
     }
   }
 }

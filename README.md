@@ -23,6 +23,12 @@ As estrelas seguem a força (5★ de 60 a 89, 6★ de 90 a 104, 7★ de 105 em d
 idade e da classe, a força evolui semana a semana (jovens que jogam e treinam crescem mais rápido) e a
 história do técnico como jogador é sorteada, com 5 chances.
 
+Cartões e lesões seguem as regras atuais: 3 amarelos na mesma competição suspendem por 1 jogo nela,
+dois amarelos no jogo viram vermelho (1 jogo) e o vermelho direto dá de 1 a 3 jogos. As lesões têm tipo e
+tempo de recuperação, e suspensos ou lesionados saem sozinhos da escalação. São 8 slots de save, as
+bandeiras têm as cores e os desenhos reais, e o técnico pode pedir demissão ou se aposentar, com uma arte
+da carreira inteira (números, clubes, troféus e grandes momentos) guardada como Hall da Fama.
+
 ## Stack
 
 - **React 19 + TypeScript + Vite**: interface

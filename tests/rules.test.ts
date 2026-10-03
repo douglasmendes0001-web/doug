@@ -12,7 +12,10 @@ describe('técnico', () => {
     const jovem = initialExperience({ name: 'A', age: 20, exPlayer: false, career: null, titulosCarreira: false });
     const exJogador = initialExperience({ name: 'B', age: 40, exPlayer: true, career: 'variosClubes', titulosCarreira: true });
     const semCarreira = initialExperience({ name: 'C', age: 40, exPlayer: false, career: null, titulosCarreira: false });
-    expect(jovem).toBe(0);
+    // Quem não foi jogador começa com 10/100 dos 20 aos 35 anos.
+    expect(jovem).toBe(10);
+    expect(initialExperience({ name: 'D', age: 35, exPlayer: false, career: null, titulosCarreira: false })).toBe(10);
+    expect(semCarreira).toBeGreaterThan(10);
     expect(exJogador).toBeGreaterThan(semCarreira);
   });
 

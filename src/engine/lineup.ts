@@ -4,6 +4,7 @@
 
 import type { TaticaId } from './data/estilos';
 import { esquemaOf, formationCounts, presetById, type Esquema, type SlotFormacao } from './data/formacoes';
+import { podeSerRelacionado, suspensoEm } from './discipline';
 import type { Lineup, Player, Pos } from './types';
 
 export const BENCH_SIZE = 9;
@@ -46,8 +47,18 @@ export function slotFit(p: Player, slot: SlotFormacao): number {
   return positionFit(p.pos, slot.pos) * sideFit(p, slot);
 }
 
-export function available(p: Player): boolean {
-  return !p.retired && p.injuredSlots <= 0 && p.suspendedGames <= 0;
+/** Pode ser relacionado (para um jogo da competição `compId`, se informada). */
+export function available(p: Player, compId?: string): boolean {
+  return podeSerRelacionado(p, compId);
+}
+
+/** Motivo de o jogador não poder ser relacionado. */
+export function motivoIndisponivel(p: Player, compId?: string): string | undefined {
+  if (p.retired) return 'aposentado';
+  if (p.injuredSlots > 0) return `lesionado${p.lesao ? ` — ${p.lesao.toLowerCase()}` : ''}`;
+  const s = suspensoEm(p, compId);
+  if (s > 0) return `suspenso por ${s} jogo${s > 1 ? 's' : ''}`;
+  return undefined;
 }
 
 /** Nota usada para escolher titulares: força ajustada pelo fôlego. */
@@ -99,9 +110,9 @@ export function assignSlots(starters: Player[], esquema: Esquema, manual?: numbe
  * Escala o melhor time possível para a formação: cada vaga recebe o melhor
  * jogador disponível considerando posição, lado/pé e fôlego.
  */
-export function autoLineup(squad: Player[], formation: string | Esquema, exclude: Set<number> = new Set(), tactic: TaticaId = 'equilibrado'): Lineup {
+export function autoLineup(squad: Player[], formation: string | Esquema, exclude: Set<number> = new Set(), tactic: TaticaId = 'equilibrado', compId?: string): Lineup {
   const esquema = typeof formation === 'string' ? presetById(formation) ?? esquemaOf({ formation }) : formation;
-  const pool = squad.filter((p) => available(p) && !exclude.has(p.id));
+  const pool = squad.filter((p) => available(p, compId) && !exclude.has(p.id));
   const pairs: { p: Player; i: number; v: number }[] = [];
   for (const p of pool) esquema.slots.forEach((sl, i) => pairs.push({ p, i, v: selectionScore(p) * slotFit(p, sl) }));
   pairs.sort((a, b) => b.v - a.v);
@@ -127,26 +138,35 @@ export function autoLineup(squad: Player[], formation: string | Esquema, exclude
   };
 }
 
-/** Corrige uma escalação salva: remove indisponíveis e completa as vagas. */
-export function repairLineup(lineup: Lineup, squad: Player[]): { lineup: Lineup; changed: string[] } {
+/**
+ * Corrige uma escalação salva para um jogo da competição `compId`: tira quem
+ * está lesionado ou suspenso (titulares e banco) e completa as vagas.
+ * `removidos` lista quem saiu e por quê.
+ */
+export function repairLineup(lineup: Lineup, squad: Player[], compId?: string): { lineup: Lineup; changed: string[]; removidos: string[] } {
   const esquema = esquemaOf(lineup);
   const byId = new Map(squad.map((p) => [p.id, p]));
   const changed: string[] = [];
-  const ok = (id: number) => {
+  const removidos: string[] = [];
+  const ok = (id: number, onde: string) => {
     const p = byId.get(id);
-    if (!p || !available(p)) {
-      if (p) changed.push(`${p.name} (${p.injuredSlots > 0 ? 'lesionado' : 'suspenso'}) saiu do time titular.`);
+    if (!p || !available(p, compId)) {
+      if (p) {
+        const txt = `${p.name} saiu ${onde}: ${motivoIndisponivel(p, compId)}.`;
+        changed.push(txt);
+        removidos.push(txt);
+      }
       return false;
     }
     return true;
   };
-  const startersOk = lineup.starters.filter(ok);
+  const startersOk = lineup.starters.filter((id) => ok(id, 'do time titular'));
   const players = startersOk.map((id) => byId.get(id)!);
   // Mantém a ordem manual quando existir; vagas de quem saiu ficam vazias.
   const manual = lineup.slots && lineup.slots.length === esquema.slots.length ? lineup.slots.map((id) => (startersOk.includes(id) ? id : -1)) : undefined;
   const slots = manual && manual.filter((id) => id >= 0).length === startersOk.length ? manual : assignSlots(players, esquema);
   const usedIds = new Set(slots.filter((id) => id >= 0));
-  const candidates = squad.filter((p) => available(p) && !usedIds.has(p.id)).sort((a, b) => selectionScore(b) - selectionScore(a));
+  const candidates = squad.filter((p) => available(p, compId) && !usedIds.has(p.id)).sort((a, b) => selectionScore(b) - selectionScore(a));
   slots.forEach((id, i) => {
     if (id >= 0) return;
     let best: Player | undefined;
@@ -166,13 +186,15 @@ export function repairLineup(lineup: Lineup, squad: Player[]): { lineup: Lineup;
     }
   });
   const starters = slots.filter((id) => id >= 0);
-  const bench = lineup.bench.filter((id) => {
-    const p = byId.get(id);
-    return p && available(p) && !usedIds.has(id);
-  });
-  for (const p of squad) {
+  const bench = lineup.bench.filter((id) => !usedIds.has(id) && ok(id, 'do banco'));
+  const reservas = squad.filter((p) => available(p, compId) && !usedIds.has(p.id) && !bench.includes(p.id)).sort((a, b) => selectionScore(b) - selectionScore(a));
+  if (!bench.some((id) => byId.get(id)?.pos === 'G')) {
+    const gk = reservas.find((p) => p.pos === 'G');
+    if (gk) bench.unshift(gk.id);
+  }
+  for (const p of reservas) {
     if (bench.length >= BENCH_SIZE) break;
-    if (available(p) && !usedIds.has(p.id) && !bench.includes(p.id)) bench.push(p.id);
+    if (!bench.includes(p.id)) bench.push(p.id);
   }
   return {
     lineup: {
@@ -184,6 +206,7 @@ export function repairLineup(lineup: Lineup, squad: Player[]): { lineup: Lineup;
       bench: bench.slice(0, BENCH_SIZE),
     },
     changed,
+    removidos,
   };
 }
 

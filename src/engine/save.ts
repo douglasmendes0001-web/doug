@@ -1,6 +1,6 @@
 // Persistência no IndexedDB (funciona no navegador e no WebView do Capacitor).
 // O estado inteiro tem alguns MB, acima do limite prático do localStorage.
-// São 3 slots de carreira e um banco de dados editável (modo editor).
+// São 8 slots de carreira e um banco de dados editável (modo editor).
 
 import { del, get, set } from 'idb-keyval';
 import { SAVE_VERSION } from './season';
@@ -9,7 +9,7 @@ import { migratePlayers } from './players';
 import type { GameState } from './types';
 import type { World } from './world';
 
-export const SLOTS = [1, 2, 3] as const;
+export const SLOTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 const slotKey = (slot: number) => `futebol-manager-save-${slot}`;
 const META_KEY = 'futebol-manager-meta';
 const EDITOR_KEY = 'futebol-manager-editor-world';
@@ -20,6 +20,8 @@ export interface SaveSummary {
   club: string;
   year: number;
   savedAt: number;
+  /** Ano da aposentadoria (save guardado como Hall da Fama). */
+  aposentado?: number;
 }
 
 type Meta = Record<number, SaveSummary>;
@@ -36,7 +38,7 @@ export async function saveGame(state: GameState): Promise<void> {
   const slot = state.saveSlot ?? 1;
   await set(slotKey(slot), state);
   const meta = await readMeta();
-  meta[slot] = { slot, coach: state.coach.name, club: state.clubs[state.userClubId].name, year: state.year, savedAt: Date.now() };
+  meta[slot] = { slot, coach: state.coach.name, club: state.clubs[state.userClubId].name, year: state.year, savedAt: Date.now(), aposentado: state.coach.aposentadoEm };
   await set(META_KEY, meta);
 }
 

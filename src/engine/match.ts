@@ -98,6 +98,8 @@ export interface SideState {
   bench: Player[];
   out: Set<number>;
   sentOff: Set<number>;
+  /** Expulsos com vermelho direto (os demais levaram dois amarelos). */
+  redDirect: Set<number>;
   subsUsed: number;
   goals: number;
   shots: number;
@@ -215,6 +217,7 @@ export class MatchSim {
       bench: t.lineup.bench.map((id) => byId.get(id)).filter((p): p is Player => !!p),
       out: new Set(),
       sentOff: new Set(),
+      redDirect: new Set(),
       subsUsed: 0,
       goals: 0, shots: 0, onTarget: 0, posse: 0,
       teamMult, drainMult, altGap: gap,
@@ -649,7 +652,9 @@ export class MatchSim {
     if (rng.next() < pFoul) {
       const f = rng.weighted(side.onField, (x) =>
         (x.p.personality === 'temperamental' ? 2 : 1) * (setorOf(x.pos) === 'DEF' || x.pos === 'VOL' ? 1.4 : 1) * (x.pos === 'G' ? 0.2 : 1)
-        * (x.p.style === 'vol_cacador' ? 1.3 : 1) / x.mult[E.card] / x.mult[E.card]);
+        * (x.p.style === 'vol_cacador' ? 1.3 : 1) / x.mult[E.card] / x.mult[E.card]
+        // Quem já tem amarelo joga com cuidado (o temperamental, nem tanto).
+        * (x.yellow > 0 ? (x.p.personality === 'temperamental' ? 0.6 : 0.35) : 1));
       f.yellow++;
       side.yellows.set(f.p.id, f.yellow);
       if (f.yellow >= 2) {
@@ -661,7 +666,7 @@ export class MatchSim {
     } else if (rng.next() < 0.0006) {
       const f = rng.pick(side.onField);
       this.push(idx, 'vermelho', `Vermelho direto! ${f.p.name} (${side.ctx.club.short}) é expulso.`, f.p.id);
-      f.yellow = Math.max(f.yellow, 3); // marca vermelho direto
+      side.redDirect.add(f.p.id);
       this.sendOff(side, f);
     }
   }
@@ -671,7 +676,7 @@ export class MatchSim {
     side.cacheKey = -1;
     side.sentOff.add(f.p.id);
     side.out.add(f.p.id);
-    f.p.suspendedGames += f.yellow >= 3 ? 2 : 1;
+    // A suspensão é aplicada no pós-jogo, na competição da partida (discipline.ts).
   }
 
   private injuryCheck(idx: 0 | 1) {

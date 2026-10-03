@@ -31,12 +31,12 @@ export function LoadGame({ onBack }: { onBack: () => void }) {
               <div className="grow">
                 <b>Slot {slot}</b>
                 {s ? (
-                  <div className="small">{s.coach} · {s.club} · temporada {s.year}{s.savedAt ? ` · salvo em ${new Date(s.savedAt).toLocaleString('pt-BR')}` : ''}</div>
+                  <div className="small">{s.aposentado !== undefined && <span className="honor-tag" style={{ marginRight: 4 }}>HALL DA FAMA</span>}{s.coach} · {s.club} · {s.aposentado !== undefined ? `aposentado em ${s.aposentado}` : `temporada ${s.year}`}{s.savedAt ? ` · salvo em ${new Date(s.savedAt).toLocaleString('pt-BR')}` : ''}</div>
                 ) : <div className="small muted">vazio</div>}
               </div>
               {s && (
                 <div className="btn-row">
-                  <button className="btn small primary" onClick={() => open(slot)}>Carregar</button>
+                  <button className="btn small primary" onClick={() => open(slot)}>{s.aposentado !== undefined ? 'Ver carreira' : 'Carregar'}</button>
                   <button className="btn small danger" onClick={() => {
                     if (window.confirm(`Apagar a carreira do slot ${slot}? Não dá para desfazer.`)) deleteSave(slot).then(refresh);
                   }}>Apagar</button>

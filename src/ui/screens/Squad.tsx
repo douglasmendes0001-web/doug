@@ -3,11 +3,12 @@ import { experienceLabel } from '../../engine/coach';
 import { ESTILOS, TATICAS, execucaoTatica, taticaById, type TaticaId } from '../../engine/data/estilos';
 import { HABILIDADES } from '../../engine/data/habilidades';
 import { CATEGORIA_LABEL, FORMACOES_PADRAO, esquemaOf, type CategoriaFormacao } from '../../engine/data/formacoes';
-import { BENCH_SIZE } from '../../engine/lineup';
+import { BENCH_SIZE, available } from '../../engine/lineup';
 import { FORCA_MINIMA_ESTRELAS, PE_LABEL, POS_ORDER, STAR_LABEL } from '../../engine/players';
 import { aguentaJogoInteiro, folegoLabel } from '../../engine/development';
+import { AMARELOS_PARA_SUSPENSAO, tempoDeLesao } from '../../engine/discipline';
 import { Rng } from '../../engine/rng';
-import { squadOf } from '../../engine/season';
+import { nextUserFixture, squadOf } from '../../engine/season';
 import { loanOut, toggleForSale } from '../../engine/transfers';
 import type { Player } from '../../engine/types';
 import { LineupBoard } from './Lineup';
@@ -68,9 +69,9 @@ export function PlayerRow({ p, role, onClick, year, hideResp }: { p: Player; rol
         <div className="p-icons">
           {p.loan && <span className="tag">EMP</span>}
           {year !== undefined && p.contractUntil <= year && !p.youth && <span className="tag warn" title="Contrato termina em dezembro">FIM</span>}
-          {p.injuredSlots > 0 && <span className="inj" title="Lesionado">+{p.injuredSlots}</span>}
+          {p.injuredSlots > 0 && <span className="inj" title={p.lesao ?? 'Lesionado'}>+{p.injuredSlots}</span>}
           {p.suspendedGames > 0 && <span className="card-r" title="Suspenso" />}
-          {p.yellowCards > 0 && p.suspendedGames === 0 && <span className="card-y" title={`${p.yellowCards} amarelo(s)`} />}
+          {p.suspendedGames === 0 && Object.values(p.amarelos ?? {}).some((n) => n >= AMARELOS_PARA_SUSPENSAO - 1) && <span className="card-y" title="Pendurado: mais um amarelo e fica suspenso" />}
           {p.forSale && <span className="tag warn">À VENDA</span>}
           {p.saleAgreed && <span className="tag warn" title="Venda acertada: sai aos 18 anos">VENDIDO</span>}
           {role === 'titular' && <span className="star">★</span>}
@@ -82,8 +83,11 @@ export function PlayerRow({ p, role, onClick, year, hideResp }: { p: Player; rol
   );
 }
 
-function PlayerDetails({ p, year }: { p: Player; year: number }) {
+function PlayerDetails({ p, year, compNome }: { p: Player; year: number; compNome: (id: string) => string }) {
   const est = ESTILOS[p.style];
+  const nomeComp = (id: string) => (id === '*' ? 'próximo jogo' : compNome(id));
+  const suspensoes = Object.entries(p.suspensoes ?? (p.suspendedGames > 0 ? { '*': p.suspendedGames } : {})).filter(([, n]) => n > 0);
+  const amarelos = Object.entries(p.amarelos ?? {}).filter(([, n]) => n > 0);
   return (
     <>
       <div className="kv">
@@ -105,8 +109,9 @@ function PlayerDetails({ p, year }: { p: Player; year: number }) {
         <span className="k">Valor / salário</span><span>{formatMoney(p.value)} / {formatMoney(p.salary)}</span>
         <span className="k">Contrato</span><span className={p.contractUntil <= year ? 'gold' : ''}>até dez/{p.contractUntil}</span>
         {p.loan && (<><span className="k">Empréstimo</span><span>até dez/{p.loan.untilYear}</span></>)}
-        {p.injuredSlots > 0 && (<><span className="k">Lesão</span><span className="inj">{p.injuredSlots} dias de jogo</span></>)}
-        {p.suspendedGames > 0 && (<><span className="k">Suspensão</span><span>{p.suspendedGames} jogo(s)</span></>)}
+        {p.injuredSlots > 0 && (<><span className="k">Lesão</span><span className="inj">{p.lesao ?? 'Lesionado'} · volta em {tempoDeLesao(p.injuredSlots)}</span></>)}
+        {suspensoes.length > 0 && (<><span className="k">Suspensão</span><span className="neg">{suspensoes.map(([c, n]) => `${n} jogo${n > 1 ? 's' : ''} (${nomeComp(c)})`).join(', ')}</span></>)}
+        {amarelos.length > 0 && (<><span className="k">Amarelos</span><span>{amarelos.map(([c, n]) => `${n}/${AMARELOS_PARA_SUSPENSAO} na ${nomeComp(c)}`).join(', ')}</span></>)}
         {p.promiseUntilSlot !== undefined && (<><span className="k">Promessa</span><span className="gold">Prometeu chance a ele</span></>)}
       </div>
       {[
@@ -286,7 +291,7 @@ export function Squad() {
         <div className="sheet-backdrop" onClick={() => setSelected(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <h2>{sel.name} <span className="muted small">{sel.pos} · {sel.age} anos</span></h2>
-            <PlayerDetails p={sel} year={state.year} />
+            <PlayerDetails p={sel} year={state.year} compNome={(id) => state.competitions.find((c) => c.def.id === id)?.def.name ?? id} />
             {sel.youth ? (
               <div className="btn-row" style={{ marginTop: 10 }}>
                 <button className="btn primary" onClick={() => run((s) => promoteYouth(s, sel.id))}>Promover ao profissional</button>
@@ -298,9 +303,9 @@ export function Squad() {
                   <p className="small gold">Veterano desconfiado de um técnico mais novo ({experienceLabel(coach.experience).toLowerCase()}). Vitórias e oportunidades aumentam o respeito.</p>
                 )}
                 <div className="btn-row" style={{ marginTop: 10 }}>
-                  <button className="btn" disabled={roleOf(sel.id) === 'titular' || starters.length >= 11 || sel.injuredSlots > 0 || sel.suspendedGames > 0}
+                  <button className="btn" disabled={roleOf(sel.id) === 'titular' || starters.length >= 11 || !available(sel, nextUserFixture(state)?.compId)}
                     onClick={() => { setRole(sel.id, 'titular'); setSelected(null); }}>Titular</button>
-                  <button className="btn" disabled={roleOf(sel.id) === 'reserva'} onClick={() => { setRole(sel.id, 'reserva'); setSelected(null); }}>Reserva</button>
+                  <button className="btn" disabled={roleOf(sel.id) === 'reserva' || !available(sel, nextUserFixture(state)?.compId)} onClick={() => { setRole(sel.id, 'reserva'); setSelected(null); }}>Reserva</button>
                   <button className="btn" disabled={roleOf(sel.id) === 'fora'} onClick={() => { setRole(sel.id, 'fora'); setSelected(null); }}>Não relacionar</button>
                   {!sel.loan && (
                     <>
@@ -311,7 +316,7 @@ export function Squad() {
                     </>
                   )}
                 </div>
-                {roleOf(sel.id) !== 'titular' && starters.length >= 11 && sel.injuredSlots <= 0 && sel.suspendedGames <= 0 && (
+                {roleOf(sel.id) !== 'titular' && starters.length >= 11 && available(sel, nextUserFixture(state)?.compId) && (
                   <>
                     <h3>Entrar no time no lugar de:</h3>
                     {starters.map((id) => state.players[id]).sort((a, b) => POS_ORDER[a.pos] - POS_ORDER[b.pos]).map((s) => (

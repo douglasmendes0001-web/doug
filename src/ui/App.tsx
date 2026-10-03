@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { jobOffers, takeJob } from '../engine/endSeason';
+import { aposentar, jobOffers, takeJob } from '../engine/endSeason';
 import { unreadCount } from '../engine/inbox';
 import { listSaves, loadGame, type SaveSummary } from '../engine/save';
 import { advanceToNextUserMatch, userFixtureAtSlot, type SlotReport } from '../engine/season';
 import type { ArtEvent, Fixture, GameState } from '../engine/types';
 import { GameLogo, GameTitle, LegendArt, TitleArt, WelcomeArt } from './components/Art';
+import { RetirementArt } from './components/CareerArt';
 import { applause, fanfare, getSoundPrefs, setSoundPrefs } from './sound';
 import { NIVEL, exitApp, useBack } from './back';
 import { Editor } from './screens/Editor';
@@ -46,14 +47,16 @@ function SeasonSummary({ state, onClose }: { state: GameState; onClose: () => vo
 }
 
 function Fired() {
-  const { state, update, setState } = useLoadedGame();
+  const { state, update } = useLoadedGame();
   useBack(() => undefined, NIVEL.alerta); // precisa escolher um caminho
   const offers = jobOffers(state);
+  const pediu = state.coach.pediuDemissao;
+  const clube = state.clubs[state.userClubId].name;
   return (
     <div className="sheet-backdrop">
       <div className="sheet">
-        <h2>Você foi demitido</h2>
-        <p>A diretoria do {state.clubs[state.userClubId].name} encerrou seu trabalho. Algumas propostas chegaram:</p>
+        <h2>{pediu ? 'Você pediu demissão' : 'Você foi demitido'}</h2>
+        <p>{pediu ? `Você deixou o ${clube}.` : `A diretoria do ${clube} encerrou seu trabalho.`} {offers.length ? 'Algumas propostas chegaram:' : 'Nenhuma proposta por enquanto.'}</p>
         {offers.map((id) => {
           const c = state.clubs[id];
           return (
@@ -63,7 +66,30 @@ function Fired() {
             </button>
           );
         })}
-        <button className="btn danger" style={{ marginTop: 10 }} onClick={() => setState(null)}>Encerrar carreira</button>
+        <p className="small muted" style={{ marginTop: 10 }}>Não quer mais ser treinador? Ao se aposentar você vê a arte da sua carreira e o save fica guardado como Hall da Fama.</p>
+        <button className="btn danger" onClick={() => {
+          if (window.confirm('Encerrar a carreira de técnico e se aposentar? Não dá para voltar atrás.')) update((s) => aposentar(s));
+        }}>Aposentar-me</button>
+      </div>
+    </div>
+  );
+}
+
+/** Despedida: arte da carreira; o save vira Hall da Fama. */
+function RetirementScreen() {
+  const { state, saveNow, setState } = useLoadedGame();
+  const sair = () => saveNow().then(() => setState(null));
+  useBack(sair, NIVEL.alerta);
+  useEffect(() => {
+    fanfare();
+    applause(4);
+    saveNow().catch(() => undefined);
+  }, [saveNow]);
+  return (
+    <div className="art-backdrop">
+      <div className="art-wrap">
+        <RetirementArt state={state} />
+        <button className="btn gold" onClick={sair}>Guardar no Hall da Fama e voltar ao menu</button>
       </div>
     </div>
   );
@@ -190,7 +216,7 @@ function GameShell() {
       </nav>
       {busy && <div className="loading">Simulando rodadas...</div>}
       {summary && <SeasonSummary state={state} onClose={() => setSummary(false)} />}
-      {state.coach.fired && <Fired />}
+      {state.coach.fired && state.coach.aposentadoEm === undefined && <Fired />}
       {sair && <ExitSheet onClose={() => setSair(false)} />}
       {!!state.pendingArt?.length && !busy && (
         <ArtOverlay art={state.pendingArt[0]} onClose={() => update((s) => { s.pendingArt = s.pendingArt?.slice(1); })} />
@@ -226,12 +252,12 @@ function Root() {
     });
   };
 
-  if (state) return <GameShell />;
+  if (state) return state.coach.aposentadoEm !== undefined ? <div className="app"><RetirementScreen /></div> : <GameShell />;
   if (screen === 'novo') return <div className="app"><NewGame onCancel={() => setScreen('menu')} /></div>;
   if (screen === 'carregar') return <div className="app"><LoadGame onBack={() => setScreen('menu')} /></div>;
   if (screen === 'editor') return <div className="app"><Editor onBack={() => setScreen('menu')} /></div>;
 
-  const last = saves?.slice().sort((a, b) => b.savedAt - a.savedAt)[0];
+  const last = saves?.filter((x) => x.aposentado === undefined).sort((a, b) => b.savedAt - a.savedAt)[0];
   return (
     <div className="app">
       <div className="title-screen">

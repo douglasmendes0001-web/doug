@@ -6,7 +6,7 @@ import { PAISES } from './data/paises';
 import { NOMES_ESTADUAIS } from './data/brasil';
 import { pushMessage } from './inbox';
 import { clamp, type Rng } from './rng';
-import type { ArtEvent, CarreiraJogador, Club, CoachStint, CountryCode, GameState, Honra, PlayerCareer } from './types';
+import type { ArtEvent, CarreiraJogador, Club, Coach, CoachStint, CountryCode, GameState, GrandeMomento, Honra, PlayerCareer, TipoMomento } from './types';
 
 /** Idade a partir da qual o técnico para de envelhecer (e pode seguir quantas temporadas quiser). */
 export const IDADE_TETO = 80;
@@ -69,6 +69,55 @@ export function pushArt(state: GameState, art: ArtEvent) {
   state.pendingArt = [...(state.pendingArt ?? []), art];
 }
 
+// ---------------- Grandes momentos ----------------
+
+const MAX_MOMENTOS = 120;
+/** Ao passar do limite, saem primeiro os momentos menos marcantes. */
+const DESCARTE: TipoMomento[] = ['goleada', 'marco', 'clube'];
+
+export function registrarMomento(state: GameState, m: Omit<GrandeMomento, 'year' | 'clubId' | 'clubName'> & { clubId?: number }) {
+  const coach = state.coach;
+  const clubId = m.clubId ?? state.userClubId;
+  const lista = (coach.momentos ??= []);
+  lista.push({ ...m, year: state.year, clubId, clubName: state.clubs[clubId]?.name ?? '' });
+  while (lista.length > MAX_MOMENTOS) {
+    const tipo = DESCARTE.find((t) => lista.some((x) => x.tipo === t));
+    const i = tipo ? lista.findIndex((x) => x.tipo === tipo) : 0;
+    lista.splice(i, 1);
+  }
+}
+
+const MARCOS_JOGOS = [100, 250, 500, 750, 1000, 1500];
+const MARCOS_VITORIAS = [100, 250, 500, 750, 1000];
+
+/** Depois de cada jogo: marcas de jogos e vitórias e goleadas históricas. */
+export function momentosDoJogo(state: GameState, gf: number, ga: number, adversario: string, compName: string) {
+  const c = state.coach;
+  if (MARCOS_JOGOS.includes(c.games)) registrarMomento(state, { tipo: 'marco', texto: `${c.games}º jogo como técnico` });
+  if (gf > ga && MARCOS_VITORIAS.includes(c.wins)) registrarMomento(state, { tipo: 'marco', texto: `${c.wins}ª vitória como técnico` });
+  if (gf - ga >= 4) registrarMomento(state, { tipo: 'goleada', texto: `Goleada de ${gf} x ${ga} sobre o ${adversario} (${compName})` });
+}
+
+/** Resumo para a arte de despedida. */
+export function resumoCarreira(coach: Coach) {
+  const jogos = coach.games;
+  const pontos = coach.wins * 3 + coach.draws;
+  const historia = coach.history ?? [];
+  const inicio = historia[0]?.fromYear;
+  const fim = coach.aposentadoEm ?? historia[historia.length - 1]?.toYear;
+  return {
+    jogos,
+    aproveitamento: jogos ? Math.round((pontos / (jogos * 3)) * 100) : 0,
+    vitoriasPct: jogos ? Math.round((coach.wins / jogos) * 100) : 0,
+    titulos: coach.titles.length,
+    clubes: new Set(historia.map((h) => h.clubId)).size,
+    temporadas: inicio !== undefined && fim !== undefined ? fim - inicio + 1 : historia.reduce((s, h) => s + h.seasons, 0),
+    inicio,
+    fim,
+    honras: historia.filter((h) => h.honor).length,
+  };
+}
+
 // ---------------- Passagens por clubes ----------------
 
 export function currentStint(state: GameState): CoachStint | undefined {
@@ -87,7 +136,9 @@ export function openStint(state: GameState, clubId: number) {
   const coach = state.coach;
   const club = state.clubs[clubId];
   coach.history = coach.history ?? [];
+  const estreia = coach.history.length === 0;
   coach.history.push({ clubId, clubName: club.name, fromYear: state.year, seasons: 0, games: 0, wins: 0, titles: [] });
+  registrarMomento(state, { clubId, tipo: estreia ? 'estreia' : 'clube', texto: estreia ? `Estreia como técnico no ${club.name}` : `Assume o comando do ${club.name}` });
   const honor = honorAt(club, coach.name);
   if (honor) {
     // O retorno de um ídolo: torcida e elenco recebem de braços abertos.
@@ -149,6 +200,7 @@ export function stintSeasonEnd(state: GameState): Honra | undefined {
   pushMessage(state, 'diretoria', 'Homenagem oficial',
     `A diretoria aprovou uma homenagem permanente: ${coach.name} passa a constar na galeria de ${novo === 'lenda' ? 'lendas' : 'ídolos'} do ${club.name}, mesmo que um dia deixe o clube.`);
   pushArt(state, { type: 'legend', clubId: s.clubId, coach: coach.name, year: state.year, honor: novo, seasons: s.seasons, titles: t });
+  registrarMomento(state, { clubId: s.clubId, tipo: 'honra', texto: `Declarado ${novo === 'lenda' ? 'LENDA' : 'ídolo'} do ${club.name} (${s.seasons} temporadas, ${t} título${t === 1 ? '' : 's'})` });
   return novo;
 }
 
@@ -237,9 +289,25 @@ export function sortearCarreira(
     const pres = prestigio(club);
     const titles: Record<string, number> = {};
     let conquistas = 0;
+    // Divisão do título: grandes clubes nunca caem para a Série C/D (no máximo,
+    // um raro título da Série B, como Palmeiras 2003 e Corinthians 2008);
+    // os demais oscilam entre a própria divisão e as vizinhas.
+    const gigante = pres >= 3 || (club.tier === 1 && club.reputation >= 80);
+    const divisao = new Map<string, number>();
+    for (const l of LIGAS.filter((x) => x.country === club.country)) for (const tt of l.tournaments) divisao.set(tt.name, l.tier);
+    const pesoDivisao = (nome: string): number => {
+      const tier = divisao.get(nome);
+      if (tier === undefined) return 1;
+      const atual = club.tier >= 1 && club.tier <= 4 ? club.tier : 1;
+      if (gigante) return tier === 1 ? 1 : tier === 2 ? 0.12 : 0;
+      if (tier === atual) return 1;
+      return Math.abs(tier - atual) === 1 ? 0.3 : 0;
+    };
     for (let t = 0; t < temporadas; t++) {
       for (const nome of clubTitleOptions(club)) {
         const tipoT = tipoTitulo(nome);
+        const peso = pesoDivisao(nome);
+        if (peso === 0) continue;
         let p = 0;
         if (tipoT === 'liga') p = 0.04 + 0.18 * forca + 0.03 * nivel.q;
         else if (tipoT === 'copa') p = 0.03 + 0.1 * forca + 0.02 * nivel.q;
@@ -250,6 +318,7 @@ export function sortearCarreira(
         else if (tipoT === 'mundial') p = (pres >= 4 ? 0.01 + 0.015 * nivel.q : 0) * [0.3, 1, 1.3, 1.6][nivel.q];
         // Ligas com dois torneios (Apertura/Clausura) dividem a chance.
         if (/Apertura|Clausura|Torneo/.test(nome)) p *= 0.6;
+        p *= peso;
         if (rng.chance(p)) {
           titles[nome] = (titles[nome] ?? 0) + 1;
           conquistas++;

@@ -6,11 +6,11 @@ import { useState } from 'react';
 import { ESTILOS } from '../../engine/data/estilos';
 import { esquemaOf, type SlotFormacao } from '../../engine/data/formacoes';
 import {
-  BENCH_SIZE, addToBench, autoLineup, available, currentSlots, placeInSlot, slotFit, starterToBench, unlist,
+  BENCH_SIZE, addToBench, autoLineup, available, currentSlots, motivoIndisponivel, placeInSlot, slotFit, starterToBench, unlist,
 } from '../../engine/lineup';
 import { POS_ORDER } from '../../engine/players';
-import { squadOf } from '../../engine/season';
-import type { Player } from '../../engine/types';
+import { nextUserFixture, squadOf } from '../../engine/season';
+import type { GameState, Player } from '../../engine/types';
 import { NIVEL, useBack } from '../back';
 import { Pitch } from '../components/Pitch';
 import { useLoadedGame } from '../game';
@@ -49,15 +49,20 @@ function PickRow({ p, fit, tag, onClick, disabled }: { p: Player; fit?: number; 
   );
 }
 
-function motivo(p: Player): string | undefined {
-  if (p.injuredSlots > 0) return `Lesionado (${p.injuredSlots} jogos)`;
-  if (p.suspendedGames > 0) return 'Suspenso';
-  return undefined;
+/** Competição do próximo jogo: a suspensão vale só nela. */
+function proximaComp(state: GameState): string | undefined {
+  return nextUserFixture(state)?.compId;
+}
+
+function motivo(p: Player, compId: string | undefined): string | undefined {
+  const m = motivoIndisponivel(p, compId);
+  return m && m[0].toUpperCase() + m.slice(1);
 }
 
 /** Escolher quem joga numa vaga do campo. */
 function SlotSheet({ slot, onClose, onDetails }: { slot: number; onClose: () => void; onDetails: (id: number) => void }) {
   const { state, update } = useLoadedGame();
+  const comp = proximaComp(state);
   useBack(onClose, NIVEL.folha);
   const get = (id: number) => state.players[id];
   const esquema = esquemaOf(state.lineup);
@@ -97,7 +102,7 @@ function SlotSheet({ slot, onClose, onDetails }: { slot: number; onClose: () => 
           <div key={g.titulo}>
             <h3>{g.titulo}</h3>
             {g.lista.sort((a, b) => nota(b) - nota(a)).map((p) => (
-              <PickRow key={p.id} p={p} fit={slotFit(p, sl)} tag={g.tag?.(p)} disabled={motivo(p)} onClick={() => escolher(p.id)} />
+              <PickRow key={p.id} p={p} fit={slotFit(p, sl)} tag={g.tag?.(p)} disabled={motivo(p, comp)} onClick={() => escolher(p.id)} />
             ))}
           </div>
         ))}
@@ -109,6 +114,7 @@ function SlotSheet({ slot, onClose, onDetails }: { slot: number; onClose: () => 
 /** Ações de um reserva (ou de uma vaga vazia do banco). */
 function BenchSheet({ playerId, onClose, onDetails }: { playerId: number | null; onClose: () => void; onDetails: (id: number) => void }) {
   const { state, update } = useLoadedGame();
+  const comp = proximaComp(state);
   const [verTodas, setVerTodas] = useState(false);
   useBack(onClose, NIVEL.folha);
   const get = (id: number) => state.players[id];
@@ -126,7 +132,7 @@ function BenchSheet({ playerId, onClose, onDetails }: { playerId: number | null;
           <h2>Relacionar no banco</h2>
           {fora.length === 0 && <p className="small muted">Todo o elenco já está relacionado.</p>}
           {fora.map((x) => (
-            <PickRow key={x.id} p={x} disabled={motivo(x)} onClick={() => { update((s) => addToBench(s.lineup, x.id)); onClose(); }} />
+            <PickRow key={x.id} p={x} disabled={motivo(x, comp)} onClick={() => { update((s) => addToBench(s.lineup, x.id)); onClose(); }} />
           ))}
         </div>
       </div>
@@ -136,7 +142,7 @@ function BenchSheet({ playerId, onClose, onDetails }: { playerId: number | null;
     .sort((a, b) => b.fit - a.fit || (a.sai?.force ?? 0) - (b.sai?.force ?? 0));
   const boas = todas.filter((v) => v.fit >= 0.85);
   const vagas = verTodas || boas.length === 0 ? todas : boas;
-  const bloqueio = motivo(p);
+  const bloqueio = motivo(p, comp);
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -171,7 +177,7 @@ function BenchSheet({ playerId, onClose, onDetails }: { playerId: number | null;
           <>
             <h3>Trocar no banco por:</h3>
             {fora.slice(0, 12).map((x) => (
-              <PickRow key={x.id} p={x} disabled={motivo(x)} onClick={() => { update((s) => addToBench(s.lineup, x.id, p.id)); onClose(); }} />
+              <PickRow key={x.id} p={x} disabled={motivo(x, comp)} onClick={() => { update((s) => addToBench(s.lineup, x.id, p.id)); onClose(); }} />
             ))}
           </>
         )}
@@ -183,6 +189,7 @@ function BenchSheet({ playerId, onClose, onDetails }: { playerId: number | null;
 /** Campo + banco com edição por toque. */
 export function LineupBoard({ onDetails }: { onDetails: (id: number) => void }) {
   const { state, update } = useLoadedGame();
+  const comp = proximaComp(state);
   const [slotSel, setSlotSel] = useState<number | null>(null);
   const [benchSel, setBenchSel] = useState<number | null | undefined>(undefined);
   const get = (id: number) => state.players[id];
@@ -191,7 +198,7 @@ export function LineupBoard({ onDetails }: { onDetails: (id: number) => void }) 
   const noCampo = slots.map((id) => (id >= 0 ? get(id) : undefined));
   const bench = state.lineup.bench.map(get).filter(Boolean);
   const fora = squadOf(state, state.userClubId).filter((p) => !slots.includes(p.id) && !state.lineup.bench.includes(p.id));
-  const indisponiveis = [...noCampo, ...bench].filter((p): p is Player => !!p && !available(p));
+  const indisponiveis = [...noCampo, ...bench].filter((p): p is Player => !!p && !available(p, comp));
 
   return (
     <div className="panel lineup-board">
@@ -213,7 +220,7 @@ export function LineupBoard({ onDetails }: { onDetails: (id: number) => void }) 
             return <button key={i} className="bench-chip empty" onClick={() => setBenchSel(null)} disabled={!fora.length}><span>+</span><small>vaga</small></button>;
           }
           return (
-            <button key={p.id} className={`bench-chip ${available(p) ? '' : 'out'}`} style={{ ['--sector' as string]: sectorColor(p.pos) }} onClick={() => setBenchSel(p.id)}>
+            <button key={p.id} className={`bench-chip ${available(p, comp) ? '' : 'out'}`} style={{ ['--sector' as string]: sectorColor(p.pos) }} onClick={() => setBenchSel(p.id)}>
               <span className="bench-force">{Math.round(p.force)}</span>
               <small>{p.pos} · {lastName(p.name)}</small>
             </button>
@@ -222,12 +229,12 @@ export function LineupBoard({ onDetails }: { onDetails: (id: number) => void }) 
       </div>
       {indisponiveis.length > 0 && (
         <div className="warning small" style={{ marginTop: 8 }}>
-          Indisponíveis na lista: {indisponiveis.map((p) => `${p.name} (${motivo(p)?.toLowerCase()})`).join(', ')}. Troque-os ou o jogo completa automaticamente.
+          Indisponíveis na lista: {indisponiveis.map((p) => `${p.name} (${motivoIndisponivel(p, comp)})`).join(', ')}. Troque-os ou o jogo completa automaticamente.
         </div>
       )}
       <div className="btn-row" style={{ marginTop: 8 }}>
         <button className="btn small primary" onClick={() => update((s) => {
-          s.lineup = { ...autoLineup(squadOf(s, s.userClubId), esquemaOf(s.lineup), new Set(), s.lineup.tactic), formation: s.lineup.formation, esquema: s.lineup.esquema };
+          s.lineup = { ...autoLineup(squadOf(s, s.userClubId), esquemaOf(s.lineup), new Set(), s.lineup.tactic, proximaComp(s)), formation: s.lineup.formation, esquema: s.lineup.esquema };
         })}>Escalar automático</button>
         {state.lineup.slots && <button className="btn small" onClick={() => update((s) => { s.lineup.slots = undefined; })}>Reorganizar posições</button>}
       </div>

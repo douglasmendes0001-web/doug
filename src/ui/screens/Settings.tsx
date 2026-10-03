@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { SLOTS, listSaves, type SaveSummary } from '../../engine/save';
 import type { AutoSave } from '../../engine/types';
 import { autoSaveMode, useLoadedGame } from '../game';
 import { goalRoar, getSoundPrefs, setSoundPrefs, whistle } from '../sound';
@@ -16,6 +17,18 @@ export function Settings() {
   const [som, setSom] = useState(getSoundPrefs());
   const mudaSom = (p: Partial<typeof som>) => { setSoundPrefs(p); setSom(getSoundPrefs()); };
   const modo = autoSaveMode(state);
+  const [saves, setSaves] = useState<SaveSummary[]>([]);
+  const [destino, setDestino] = useState(0);
+  useEffect(() => { listSaves().then(setSaves); }, [lastSaved]);
+  const atual = state.saveSlot ?? 1;
+  const ocupado = saves.find((x) => x.slot === destino);
+  const salvarEm = () => {
+    if (!destino || destino === atual) return;
+    if (ocupado && !window.confirm(`O slot ${destino} tem a carreira de ${ocupado.coach} (${ocupado.club}). Substituir?`)) return;
+    saveNow()
+      .then(() => { update((g) => { g.saveSlot = destino; }); return saveNow(); })
+      .then(() => { toast(`Carreira salva no slot ${destino}. O slot ${atual} fica como cópia de segurança.`); setDestino(0); });
+  };
 
   if (editing) return <CareerEditor onClose={() => setEditing(false)} />;
 
@@ -43,6 +56,19 @@ export function Settings() {
               if (window.confirm('Voltar ao menu sem salvar? O progresso desde o último salvamento será perdido.')) setState(null);
             }}>Sair sem salvar</button>
           )}
+        </div>
+        <div className="form-field" style={{ marginTop: 10 }}>
+          <label>Salvar em outro slot</label>
+          <div className="row-between" style={{ gap: 8 }}>
+            <select className="sel" style={{ flex: 1 }} value={destino} onChange={(e) => setDestino(Number(e.target.value))}>
+              <option value={0}>Escolha o slot...</option>
+              {SLOTS.filter((x) => x !== atual).map((x) => (
+                <option key={x} value={x}>Slot {x} — {saves.find((y) => y.slot === x)?.club ?? 'vazio'}</option>
+              ))}
+            </select>
+            <button className="btn small" style={{ flex: 'none' }} disabled={!destino} onClick={salvarEm}>Salvar</button>
+          </div>
+          <span className="small muted">A carreira passa a ser salva no novo slot; o slot atual guarda o ponto de agora como cópia de segurança.</span>
         </div>
       </div>
 

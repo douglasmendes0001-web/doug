@@ -1,6 +1,7 @@
 // Virada de temporada: campeões, acesso/rebaixamento, vagas continentais,
 // evolução/aposentadoria dos jogadores e avaliação do técnico.
 
+import { zerarCartoes } from './discipline';
 import { CAMBIO_INICIAL, SIMBOLO, moedaDoPais, oscilarCambio } from './economy';
 import { syncMoney } from './money';
 import { initialRespeito } from './coach';
@@ -14,7 +15,7 @@ import { initialSponsors, sponsorReview, type SeasonPerformance } from './sponso
 import { concacafEntrants } from './seasonSetup';
 import { agreedTransfersSeasonEnd, contractsSeasonEnd } from './transfers';
 import { youthSeasonEnd } from './youth';
-import { IDADE_TETO, closeStint, openStint, stintSeasonEnd } from './career';
+import { IDADE_TETO, closeStint, openStint, registrarMomento, resumoCarreira, stintSeasonEnd } from './career';
 import type { Competition, CountryCode, GameState, Player, SeasonRecord } from './types';
 
 function leagueComps(state: GameState, l: LeagueSeed): Competition[] {
@@ -135,7 +136,10 @@ function promotionRelegation(state: GameState): { subiu: boolean; caiu: boolean 
           : `O ${club.name} foi rebaixado. Um dia triste para a nossa história.`);
       if (!promotedUp) state.coach.confDiretoria = clamp(state.coach.confDiretoria - 25, 0, 100);
       else state.coach.confDiretoria = clamp(state.coach.confDiretoria + 20, 0, 100);
-      if (promotedUp) subiu = true;
+      if (promotedUp) {
+        subiu = true;
+        registrarMomento(state, { tipo: 'acesso', texto: `Acesso com o ${club.name} (${LIGAS.find((x) => x.id === m.leagueId)?.tournaments[0]?.name ?? 'divisão de cima'})` });
+      }
       else caiu = true;
     }
   }
@@ -191,8 +195,7 @@ function developPlayers(state: GameState, rng: Rng) {
       p.salary = Math.max(p.salary, monthlySalary(p.value, club.country) * 0.8);
       p.seasonGoals = 0;
       p.seasonGames = 0;
-      p.yellowCards = 0;
-      p.suspendedGames = 0;
+      zerarCartoes(p);
       p.energy = 100;
       if (rng.chance(retirementChance(p))) {
         p.retired = true;
@@ -286,6 +289,7 @@ export function takeJob(state: GameState, clubId: number) {
   closeStint(state);
   coach.clubId = clubId;
   coach.fired = false;
+  coach.pediuDemissao = undefined;
   coach.confDiretoria = 60;
   coach.confTorcida = 50;
   state.userClubId = clubId;
@@ -295,4 +299,28 @@ export function takeJob(state: GameState, clubId: number) {
   initialSponsors(state, new Rng(state.rng ^ clubId));
   pushMessage(state, 'diretoria', 'Bem-vindo', `Seja bem-vindo ao ${state.clubs[clubId].name}, ${coach.name}. Contamos com você.`);
   openStint(state, clubId);
+}
+
+/** O técnico pede demissão: deixa o clube e escolhe entre outro clube e a aposentadoria. */
+export function pedirDemissao(state: GameState) {
+  const coach = state.coach;
+  const club = state.clubs[state.userClubId];
+  coach.fired = true;
+  coach.pediuDemissao = true;
+  pushMessage(state, 'diretoria', 'Pedido de demissão aceito',
+    `A diretoria do ${club.name} aceitou o pedido de demissão de ${coach.name} e agradece pelo trabalho.`);
+}
+
+/** Encerra a carreira: o save vira Hall da Fama com a arte de despedida. */
+export function aposentar(state: GameState) {
+  const coach = state.coach;
+  const club = state.clubs[state.userClubId];
+  closeStint(state);
+  coach.fired = true;
+  coach.pediuDemissao = undefined;
+  coach.aposentadoEm = state.year;
+  const r = resumoCarreira(coach);
+  registrarMomento(state, { tipo: 'adeus', texto: `Pendura a prancheta aos ${coach.age} anos: ${r.jogos} jogos e ${r.titulos} título${r.titulos === 1 ? '' : 's'}` });
+  pushMessage(state, 'midia', `${coach.name} se aposenta`,
+    `${coach.name} anunciou a aposentadoria aos ${coach.age} anos. Foram ${r.jogos} jogos, ${coach.wins} vitórias e ${r.titulos} título(s), com ${r.aproveitamento}% de aproveitamento. Última casa: ${club.name}.`);
 }

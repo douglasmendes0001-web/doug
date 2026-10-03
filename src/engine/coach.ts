@@ -21,7 +21,9 @@ export interface CoachInput {
 
 /** Experiência inicial (0-100) a partir da idade e da história como jogador. */
 export function initialExperience(c: CoachInput): number {
-  let exp = clamp((c.age - IDADE_MIN) * 1.6, 0, 50);
+  // Dos 20 aos 35 anos, quem não foi jogador começa com 10/100; depois a
+  // bagagem cresce com a idade (até 50 aos 60 anos).
+  let exp = c.age <= 35 ? 10 : clamp(10 + (c.age - 35) * 1.6, 10, 50);
   if (c.age >= IDADE_EX_JOGADOR && c.exPlayer) {
     exp += 10;
     if (c.career === 'variosClubes') exp += 6; // conhece muitos vestiários

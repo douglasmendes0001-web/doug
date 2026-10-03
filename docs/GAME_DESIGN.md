@@ -289,10 +289,38 @@ Jogo aéreo, Jogo pelas pontas, Ligação direta e Futebol total. Cada tática:
 - tem **complexidade**: a execução é `1 − max(0, complexidade − exp/100 − 0,15) × 1,2` (mín. 40%). Um
   técnico novato usando Tiki-taka executa só 40%, perde os bônus e ainda sofre penalidade de rendimento.
 
+## Economia (valores de 2026)
+
+- **Moeda:** tudo é guardado em euro e mostrado na moeda do clube do técnico: real (Brasil), euro
+  (Europa) ou dólar (demais países das Américas e América do Norte). Negociações com clubes europeus são
+  em euro e com a MLS/Liga MX em dólar, sempre com a conversão: "€ 8,4 mi (≈ R$ 52,9 mi)".
+- **Câmbio:** começa em € 1 = R$ 6,30 = US$ 1,17 e oscila a cada temporada (passeio aleatório com
+  desvio de 6% para o real e 3,5% para o dólar). A mídia avisa o câmbio do ano.
+- **Receita anual** por liga (do menor ao maior clube, em milhões de €): Série A 28–210, Série B 4–28,
+  Série C 0,8–5, Série D 0,15–1,2; Argentina 6–110; Premier League 150–850; LaLiga 45–900;
+  Bundesliga 60–900; Serie A italiana 45–480; Ligue 1 35–820; Portugal 8–260; Holanda 10–260;
+  Turquia 12–260; Escócia 5–140; Grécia 4–75. A posição na faixa vem da reputação do clube
+  (`mín + (máx − mín) × q^2,2`). Um piso garante que nenhum clube comece com a folha acima de ~45% da
+  receita; o rebaixamento corta 30% desse piso.
+- **Por semana:** TV e receitas comerciais (52% da receita), patrocínios, bilheteria nos jogos em casa,
+  menos folha salarial e custos fixos (28% da receita + estádio + CT). Prêmios de campeão: Brasileirão
+  € 10,5 mi, Copa do Brasil € 12 mi, estaduais € 0,25–0,8 mi, Libertadores € 21 mi, Sul-Americana
+  € 8,5 mi, Champions € 45 mi, Liga Europa € 18 mi, Conference € 8 mi, Mundial de Clubes € 100 mi.
+- **Valor de mercado:** curva por força (força 40 ≈ € 1,8 mi, 60 ≈ € 11 mi, 100 ≈ € 30 mi,
+  135 ≈ € 120 mi) × idade (auge de 21 a 24 anos; jovens valem pelo potencial) × estrelas
+  (1★ 0,8 até 7★ 2,4) × vitrine do país (Inglaterra 1,15; Espanha/Alemanha 1; Itália/França 0,95;
+  Brasil 1; Argentina 0,75; Portugal/Holanda 0,45; Turquia 0,4; Escócia/Grécia 0,2…).
+  **Teto: € 358 milhões** (só um lendário jovem na Premier League chega perto).
+- **Salário mensal:** `0,07 × valor^0,907` × fator do país (Brasil 1,35; Inglaterra 1,25; Turquia 1,3)
+  + piso. Ex.: craque de € 11 mi no Brasil ≈ R$ 1,9 mi/mês; jogador de Série D ≈ R$ 8 mil/mês.
+- Saves antigos são convertidos automaticamente (valores, salários, caixa, prêmios e patrocínios).
+
 ## Patrocínios
 
-- **Master:** valor semanal pelo tamanho da marca (1–5) e pela economia da liga.
-- **Base:** até 3 marcas pequenas. Esse dinheiro também conta como investimento nas categorias de base.
+- **Master:** fatia da receita anual pelo nível da marca (1–5): 7%, 10%, 13%, 16% e 20%. Ex.: Flamengo
+  com marca nível 5 ≈ R$ 265 mi/ano (a Betano paga R$ 268,5 mi).
+- **Base:** até 3 marcas pequenas, de 0,2% a 0,6% da receita (Flamengo ≈ R$ 2–8 mi/ano; Série B ≈ R$
+  100 mil). Esse dinheiro também conta como investimento nas categorias de base.
 - **Revisão anual por desempenho.** A nota soma: objetivo cumprido (+1/−1), títulos (+1 cada), acesso
   (+1), rebaixamento (−2) e humor da torcida (±1).
   - ≥ 2 (excelente ou brilhante): uma marca maior oferece contrato com cláusula de desempenho, e a atual
@@ -326,6 +354,30 @@ Jogo aéreo, Jogo pelas pontas, Ligação direta e Futebol total. Cada tática:
   quer renovar, mas dá para tentar convencer. Sem renovação, o jogador sai de graça. Na IA, 85% renovam.
 - **Empréstimos** até o fim do ano: pegar reservas de outros clubes (taxa de 8% do valor) ou mandar um
   jogador para ganhar ritmo. Na virada do ano todos voltam.
+- **América do Norte:** clubes da MLS e da Liga MX compram (principalmente jogadores de 24+ anos) e
+  vendem, em dólar, na própria janela.
+- **Base brasileira para o exterior:** na janela europeia, clubes da Europa fazem propostas por joias da
+  base (lendários, 4★+ ou alto potencial). Se o técnico vender, o dinheiro entra na hora, mas pela regra
+  da FIFA (artigo 19) o garoto **só se muda ao completar 18 anos**; até lá continua no clube, marcado
+  como VENDIDO. Com 18+ ele sai na hora.
+- **Busca com filtros:** nome, posição, país ou liga (inclui agentes livres e América do Norte), idade,
+  pé, força mínima, estrelas mínimas, preço e salário máximos; ordena por força, custo-benefício,
+  juventude, estrelas, valor ou salário.
+
+## Escalação por toque
+
+- Toque numa vaga do campo: abre a lista de quem pode jogar ali (banco, titulares que trocam de lugar e
+  não relacionados), com a **força já ajustada à vaga** e a etiqueta ideal / pé trocado / fora de posição.
+- O banco mostra as 9 vagas; tocar num reserva oferece as vagas onde ele rende (do melhor encaixe para o
+  pior), trocar por outro do elenco ou tirá-lo da lista. Vaga vazia: relacionar alguém.
+- A lista do elenco é dividida em Titulares, Banco e Não relacionados, com busca e ordenação.
+
+## Celular
+
+- Barra de status e barra de gestos respeitadas (áreas seguras do Android via Capacitor).
+- **Botão voltar do Android:** fecha a janela/folha aberta → volta a sub-aba → volta à aba Elenco → pergunta
+  se quer sair (continuar, salvar e ir ao menu, salvar e fechar). Na partida, pausa; no menu, volta ao
+  início; na tela inicial, fecha o app.
 
 ## Previsão (Monte Carlo)
 

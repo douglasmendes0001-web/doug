@@ -9,8 +9,10 @@ function shortName(n: string): string {
   return parts.length > 1 ? parts[parts.length - 1] : n;
 }
 
-export function Pitch({ esquema, players, selected, onSlotClick }: {
+export function Pitch({ esquema, players, selected, onSlotClick, showForce }: {
   esquema: Esquema;
+  /** Mostra a força ajustada à vaga no lugar do pé. */
+  showForce?: boolean;
   /** Jogador em cada vaga (mesma ordem de esquema.slots). */
   players?: (Player | undefined)[];
   selected?: number | null;
@@ -36,8 +38,11 @@ export function Pitch({ esquema, players, selected, onSlotClick }: {
             onClick={() => onSlotClick?.(i)}
             title={p ? `${p.name} (${p.pos}, pé ${p.foot})` : sl.pos}
           >
-            <span className="pitch-dot">{sl.pos}{sl.lado !== 'C' && sl.pos !== 'LD' && sl.pos !== 'LE' ? sl.lado : ''}</span>
-            {p && <span className="pitch-name">{shortName(p.name)} <i>{p.foot}</i></span>}
+            <span className="pitch-dot">{sl.pos}</span>
+            {p && (showForce
+              ? <span className="pitch-name">{shortName(p.name)} <i>{Math.round(p.force * fit)}</i>{cls !== 'ok' && <b className="pitch-foot">{p.foot}</b>}</span>
+              : <span className="pitch-name">{shortName(p.name)} <i>{p.foot}</i></span>)}
+            {!p && showForce && <span className="pitch-name">vaga</span>}
           </button>
         );
       })}

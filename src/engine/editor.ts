@@ -11,9 +11,9 @@ import type { World } from './world';
 export const EDITOR_SEED = 20260101;
 export const IDADE_NOVO_JOGADOR = 15;
 
-function recalcValue(p: Player) {
-  p.value = marketValue(p.force, p.age, p.stars);
-  p.salary = monthlySalary(p.value);
+function recalcValue(p: Player, country?: CountryCode) {
+  p.value = marketValue(p.force, p.age, p.stars, p.potential, country);
+  p.salary = monthlySalary(p.value, country);
 }
 
 export interface PlayerEdit {
@@ -54,7 +54,7 @@ export function editPlayer(world: World, id: number, e: PlayerEdit, rng = new Rn
     if (p.abilities.length > max) p.abilities = p.abilities.slice(0, max);
     else syncAbilities(rng, p);
   }
-  recalcValue(p);
+  recalcValue(p, world.clubs[p.clubId]?.country);
 }
 
 /** Liga/desliga uma habilidade respeitando posição e o limite pelas estrelas. */

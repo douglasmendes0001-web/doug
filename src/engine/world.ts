@@ -1,6 +1,7 @@
 // Criação do "mundo" do jogo: clubes de todas as ligas, clubes externos para
 // torneios internacionais e os elencos completos.
 
+import { baseTicketPrice, clubRevenue, revenueFloorFor, roundMoney } from './economy';
 import { CIDADES_UF, SERIE_A, SERIE_B, SERIE_C, SERIE_D, type ClubSeed } from './data/brasil';
 import { EUROPA, MUNDO, SUFIXOS_MUNDO, type CitySeed } from './data/europa';
 import { LIGAS, leagueById } from './data/ligas';
@@ -167,7 +168,7 @@ function buildClubsAndPlayers(drafts: ClubDraft[], rng: Rng): World {
       leagueId: d.leagueId, colors, reputation, altitude: d.altitude,
       stadium: { name: d.country === 'BRA' ? `Estádio do ${d.name}` : `${d.city ?? d.name} Arena`, capacity: Math.max(2000, capacity) },
       ct: clamp(Math.round(1 + 4 * (1 - d.rankFrac) * ecoCap + (d.eco > 1 ? 1 : 0)), 1, 5),
-      money: 0, ticketPrice: Math.round(40 + 25 * Math.min(d.eco, 3)), playerIds: [], baseForce,
+      money: 0, ticketPrice: 0, playerIds: [], baseForce,
       baseLevel: clamp(Math.round(1 + 3 * (1 - d.rankFrac) * ecoCap + (d.eco > 1 ? 1 : 0)), 1, 5),
       youthIds: [], baseInvest: 0, investors: [],
     };
@@ -176,8 +177,10 @@ function buildClubsAndPlayers(drafts: ClubDraft[], rng: Rng): World {
       players.push(p);
       club.playerIds.push(p.id);
     });
-    const folhaAnual = club.playerIds.reduce((s, pid) => s + players[pid].salary, 0) * 12;
-    club.money = Math.round(folhaAnual * (0.35 + reputation / 160));
+    // Caixa inicial: cerca de um quarto da receita anual (orçamento para reforços).
+    club.revenueFloor = Math.round(revenueFloorFor(club.playerIds.reduce((s, pid) => s + players[pid].salary, 0) * 12));
+    club.ticketPrice = baseTicketPrice(club);
+    club.money = roundMoney(clubRevenue(club) * (0.08 + reputation / 1000));
     clubs.push(club);
   });
   return { clubs, players };

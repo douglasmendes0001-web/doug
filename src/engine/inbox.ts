@@ -253,15 +253,5 @@ export function seasonStartMessages(state: GameState) {
   }
 }
 
-export function formatMoney(v: number): string {
-  const neg = v < 0;
-  const a = Math.abs(v);
-  let s: string;
-  if (a >= 1_000_000) {
-    const m = Math.floor(a / 1_000_000);
-    const k = Math.round((a % 1_000_000) / 1000);
-    s = k ? `${m}M ${k}k` : `${m}M`;
-  } else if (a >= 1000) s = `${Math.round(a / 1000)}k`;
-  else s = `${Math.round(a)}`;
-  return `${neg ? '-' : ''}$${s}`;
-}
+import { formatMoney } from './money';
+export { formatMoney };

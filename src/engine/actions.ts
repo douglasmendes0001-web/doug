@@ -3,7 +3,7 @@
 import { respondMessage } from './inbox';
 import type { Rng } from './rng';
 import { resolveInvestor, resolveSponsorMessage } from './sponsors';
-import { resolveContractMessage, resolveOffer } from './transfers';
+import { resolveContractMessage, resolveOffer, resolveYouthOffer } from './transfers';
 import type { GameState } from './types';
 
 export function handleMessageAction(state: GameState, rng: Rng, msgId: number, actionId: string): string {
@@ -12,6 +12,8 @@ export function handleMessageAction(state: GameState, rng: Rng, msgId: number, a
   switch (m.kind) {
     case 'proposta':
       return resolveOffer(state, msgId, actionId === 'aceitar');
+    case 'proposta-base':
+      return resolveYouthOffer(state, msgId, actionId === 'aceitar');
     case 'patrocinio-oferta':
     case 'patrocinio-ajuste':
       return resolveSponsorMessage(state, rng, msgId, actionId);

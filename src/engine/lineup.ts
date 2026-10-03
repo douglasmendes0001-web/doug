@@ -191,3 +191,70 @@ export function repairLineup(lineup: Lineup, squad: Player[]): { lineup: Lineup;
 export function countsOf(lineup: Lineup): Record<Pos, number> {
   return formationCounts(esquemaOf(lineup));
 }
+
+// ---------------- Edição manual da escalação ----------------
+
+/** Vagas atuais (vaga → id do jogador, -1 se vazia). */
+export function currentSlots(lineup: Lineup, get: (id: number) => Player | undefined): number[] {
+  const esquema = esquemaOf(lineup);
+  const titulares = lineup.starters.map(get).filter((p): p is Player => !!p);
+  return assignSlots(titulares, esquema, lineup.slots);
+}
+
+function fixar(lineup: Lineup, slots: number[]) {
+  lineup.starters = slots.filter((id) => id >= 0);
+  lineup.slots = slots.every((id) => id >= 0) ? slots : undefined;
+}
+
+/**
+ * Coloca um jogador numa vaga do campo. Se ele já era titular, troca de lugar
+ * com quem estava na vaga; se vinha do banco, quem sai ocupa o lugar dele no
+ * banco; se não estava relacionado, quem sai vai para o banco (se houver vaga).
+ */
+export function placeInSlot(lineup: Lineup, get: (id: number) => Player | undefined, slot: number, playerId: number) {
+  const slots = currentSlots(lineup, get);
+  const sai = slots[slot] ?? -1;
+  if (sai === playerId) return;
+  const j = slots.indexOf(playerId);
+  if (j >= 0) {
+    slots[j] = sai;
+    slots[slot] = playerId;
+  } else {
+    slots[slot] = playerId;
+    const b = lineup.bench.indexOf(playerId);
+    if (b >= 0) {
+      if (sai >= 0) lineup.bench[b] = sai;
+      else lineup.bench.splice(b, 1);
+    } else if (sai >= 0 && lineup.bench.length < BENCH_SIZE) {
+      lineup.bench.push(sai);
+    }
+  }
+  fixar(lineup, slots);
+}
+
+/** Tira um titular do campo e manda para o banco (a vaga fica vazia). */
+export function starterToBench(lineup: Lineup, get: (id: number) => Player | undefined, playerId: number) {
+  const slots = currentSlots(lineup, get).map((id) => (id === playerId ? -1 : id));
+  fixar(lineup, slots);
+  lineup.slots = undefined;
+  if (!lineup.bench.includes(playerId)) {
+    if (lineup.bench.length >= BENCH_SIZE) lineup.bench.pop();
+    lineup.bench.push(playerId);
+  }
+}
+
+/** Relaciona um jogador no banco (substituindo outro reserva se estiver cheio). */
+export function addToBench(lineup: Lineup, playerId: number, replace?: number) {
+  lineup.starters = lineup.starters.filter((id) => id !== playerId);
+  if (lineup.bench.includes(playerId)) return;
+  const r = replace !== undefined ? lineup.bench.indexOf(replace) : -1;
+  if (r >= 0) lineup.bench[r] = playerId;
+  else if (lineup.bench.length < BENCH_SIZE) lineup.bench.push(playerId);
+}
+
+/** Tira o jogador da lista (nem titular nem reserva). */
+export function unlist(lineup: Lineup, playerId: number) {
+  if (lineup.starters.includes(playerId)) lineup.slots = undefined;
+  lineup.starters = lineup.starters.filter((id) => id !== playerId);
+  lineup.bench = lineup.bench.filter((id) => id !== playerId);
+}

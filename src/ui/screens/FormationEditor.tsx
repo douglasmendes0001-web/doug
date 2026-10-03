@@ -5,6 +5,7 @@ import {
 import type { Pos } from '../../engine/types';
 import { Pitch } from '../components/Pitch';
 import { useLoadedGame } from '../game';
+import { NIVEL, useBack } from '../back';
 
 const POS_CAMPO: Pos[] = ['LD', 'ZG', 'LE', 'VOL', 'MEI', 'ATA'];
 const POS_NOME: Record<Pos, string> = { G: 'Goleiro', LD: 'Lateral direito', ZG: 'Zagueiro', LE: 'Lateral esquerdo', VOL: 'Volante', MEI: 'Meia', ATA: 'Atacante' };
@@ -16,6 +17,7 @@ export function FormationEditor({ onClose }: { onClose: () => void }) {
   const atual = esquemaOf(state.lineup);
   const [draft, setDraft] = useState<Esquema>(() => structuredClone(atual));
   const [sel, setSel] = useState<number | null>(1);
+  useBack(onClose, NIVEL.folha);
   const [nome, setNome] = useState(atual.custom ? atual.nome : `${atual.nome} (minha)`);
   const [erro, setErro] = useState('');
   const customs = state.customFormations ?? [];

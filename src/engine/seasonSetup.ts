@@ -1,6 +1,7 @@
 // Monta as competições de uma temporada: ligas, copas nacionais, estaduais,
 // torneios continentais e o Mundial de Clubes.
 
+import { PREMIO_CONTINENTAL, cupPrize, estadualPrize, leaguePrize } from './economy';
 import { NOMES_ESTADUAIS } from './data/brasil';
 import { COPAS, LIGAS, VAGAS_CONMEBOL, VAGAS_UEFA } from './data/ligas';
 import { createCompetition } from './competitions';
@@ -27,7 +28,7 @@ export function buildSeasonCompetitions(state: GameState): Competition[] {
         name: t.name, short: t.short, kind: 'liga', country: l.country, tier: l.tier,
         stages: t.stages, window: t.window, prefer: 'fds',
         track: `${l.country}-liga${t.suffix}`,
-        prize: Math.round(25_000_000 * l.eco), leagueId: l.id,
+        prize: leaguePrize(l.id), leagueId: l.id,
       };
       comps.push(createCompetition(def, teams, state.year));
     }
@@ -42,7 +43,7 @@ export function buildSeasonCompetitions(state: GameState): Competition[] {
       .map((c) => c.id);
     comps.push(createCompetition({
       id: `COPA-${cup.country}`, name: cup.name, short: cup.short, kind: 'copa', country: cup.country,
-      stages: cup.stages, window: [6, 49], prefer: 'meio', track: `${cup.country}-copa`, prize: 15_000_000,
+      stages: cup.stages, window: [6, 49], prefer: 'meio', track: `${cup.country}-copa`, prize: cupPrize(cup.country),
     }, teams, state.year));
   }
 
@@ -58,7 +59,7 @@ export function buildSeasonCompetitions(state: GameState): Competition[] {
     ];
     comps.push(createCompetition({
       id: `EST-${uf}`, name: `Campeonato ${NOMES_ESTADUAIS[uf] ?? uf}`, short: `Estadual ${uf}`, kind: 'estadual', country: 'BRA',
-      stages, window: [0, 13], prefer: 'any', track: 'BRA-est', prize: 2_000_000,
+      stages, window: [0, 13], prefer: 'any', track: 'BRA-est', prize: estadualPrize(uf),
     }, teams, state.year));
   }
 
@@ -78,11 +79,11 @@ export function buildSeasonCompetitions(state: GameState): Competition[] {
       comps.push(createCompetition({ id, name, short, kind: 'continental', confed, stages, window, prefer: 'meio', track: confed, prize }, teams, state.year));
     }
   };
-  cont('LIB', 'Copa Libertadores', 'Libertadores', 'CONMEBOL', groupsKO('Mata-mata'), [8, 47], 120_000_000);
-  cont('SUD', 'Copa Sul-Americana', 'Sul-Americana', 'CONMEBOL', groupsKO('Mata-mata'), [8, 47], 40_000_000);
-  cont('UCL', 'Liga dos Campeões', 'Champions', 'UEFA', swiss(), [6, 46], 200_000_000);
-  cont('UEL', 'Liga Europa', 'Liga Europa', 'UEFA', swiss(), [6, 46], 60_000_000);
-  cont('UECL', 'Liga Conferência', 'Conference', 'UEFA', swiss(), [6, 46], 25_000_000);
+  cont('LIB', 'Copa Libertadores', 'Libertadores', 'CONMEBOL', groupsKO('Mata-mata'), [8, 47], PREMIO_CONTINENTAL.LIB);
+  cont('SUD', 'Copa Sul-Americana', 'Sul-Americana', 'CONMEBOL', groupsKO('Mata-mata'), [8, 47], PREMIO_CONTINENTAL.SUD);
+  cont('UCL', 'Liga dos Campeões', 'Champions', 'UEFA', swiss(), [6, 46], PREMIO_CONTINENTAL.UCL);
+  cont('UEL', 'Liga Europa', 'Liga Europa', 'UEFA', swiss(), [6, 46], PREMIO_CONTINENTAL.UEL);
+  cont('UECL', 'Liga Conferência', 'Conference', 'UEFA', swiss(), [6, 46], PREMIO_CONTINENTAL.UECL);
 
   // ---- Mundial de Clubes ----
   if (isMundialYear(state)) {
@@ -93,7 +94,7 @@ export function buildSeasonCompetitions(state: GameState): Competition[] {
         { type: 'rr', name: 'Fase de grupos', groups: 8, legs: 1, grouping: 'draw', advance: 2 },
         { type: 'ko', name: 'Mata-mata', legs: 1 },
       ],
-      window: [26, 30], prefer: 'any', track: 'FIFA', prize: 300_000_000, neutral: true, venueClubId: host,
+      window: [26, 30], prefer: 'any', track: 'FIFA', prize: PREMIO_CONTINENTAL.MUN, neutral: true, venueClubId: host,
     }, teams, state.year));
   }
   return comps;

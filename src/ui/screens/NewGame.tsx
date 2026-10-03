@@ -10,6 +10,7 @@ import { createWorld, type World } from '../../engine/world';
 import { CareerBuilder, emptyCareer } from '../components/CareerBuilder';
 import { Flag } from '../components/Flag';
 import { useGame } from '../game';
+import { NIVEL, useBack } from '../back';
 
 const PAISES_JOGAVEIS = [...new Set(LIGAS.map((l) => l.country))];
 const NACIONALIDADES = (Object.keys(PAISES) as CountryCode[]).sort((a, b) => PAISES[a].name.localeCompare(PAISES[b].name));
@@ -49,6 +50,8 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
   const [mundialAnual, setMundialAnual] = useState(false);
   const [slot, setSlot] = useState(1);
   const [autoSave, setAutoSave] = useState<AutoSave>('partida');
+  // Voltar no celular: passo anterior (no primeiro passo, o menu cuida).
+  useBack(() => setStep((x) => Math.max(0, x - 1)), NIVEL.aba, step > 0);
   const [creating, setCreating] = useState(false);
 
   const ligas = LIGAS.filter((l) => l.country === country);

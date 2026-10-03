@@ -3,11 +3,13 @@ import { initialRespeito } from '../../engine/coach';
 import type { Player } from '../../engine/types';
 import { useLoadedGame } from '../game';
 import { ClubBrowser, ClubEditor } from './Editor';
+import { NIVEL, useBack } from '../back';
 
 /** Modo editor dentro da carreira: as mudanças valem na hora para este jogo salvo. */
 export function CareerEditor({ onClose }: { onClose: () => void }) {
   const { state, update } = useLoadedGame();
   const [clubId, setClubId] = useState<number | null>(state.userClubId);
+  useBack(onClose, NIVEL.aba);
 
   const changed = () => update((s) => {
     s.edited = true;

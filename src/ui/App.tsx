@@ -6,6 +6,7 @@ import { advanceToNextUserMatch, userFixtureAtSlot, type SlotReport } from '../e
 import type { ArtEvent, Fixture, GameState } from '../engine/types';
 import { GameLogo, GameTitle, LegendArt, TitleArt, WelcomeArt } from './components/Art';
 import { applause, fanfare, getSoundPrefs, setSoundPrefs } from './sound';
+import { NIVEL, exitApp, useBack } from './back';
 import { Editor } from './screens/Editor';
 import { LoadGame } from './screens/LoadGame';
 import { Header } from './components/Header';
@@ -24,6 +25,7 @@ import { Squad } from './screens/Squad';
 type Tab = 'elenco' | 'calendario' | 'mensagens' | 'competicoes' | 'clube' | 'mercado' | 'config';
 
 function SeasonSummary({ state, onClose }: { state: GameState; onClose: () => void }) {
+  useBack(onClose);
   const last = state.history[state.history.length - 1];
   if (!last) return null;
   const keys = ['BRA1', 'COPA-BRA', 'LIB', 'SUD', 'UCL', 'MUN', 'ARG1-AP', 'ARG1-CL', 'ENG1', 'ESP1', 'ITA1', 'GER1', 'FRA1'];
@@ -45,6 +47,7 @@ function SeasonSummary({ state, onClose }: { state: GameState; onClose: () => vo
 
 function Fired() {
   const { state, update, setState } = useLoadedGame();
+  useBack(() => undefined, NIVEL.alerta); // precisa escolher um caminho
   const offers = jobOffers(state);
   return (
     <div className="sheet-backdrop">
@@ -70,6 +73,7 @@ function Fired() {
 function ArtOverlay({ art, onClose }: { art: ArtEvent; onClose: () => void }) {
   const { state } = useLoadedGame();
   const club = state.clubs[art.clubId];
+  useBack(onClose, NIVEL.alerta);
   useEffect(() => {
     if (art.type === 'welcome') applause(3);
     else fanfare();
@@ -87,12 +91,34 @@ function ArtOverlay({ art, onClose }: { art: ArtEvent; onClose: () => void }) {
   );
 }
 
+/** Voltar na tela principal: pergunta antes de sair, salvando a carreira. */
+function ExitSheet({ onClose }: { onClose: () => void }) {
+  const { saveNow, setState } = useLoadedGame();
+  useBack(onClose, NIVEL.alerta);
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <h2>Sair da carreira?</h2>
+        <p className="small muted">A carreira é salva antes de sair.</p>
+        <div className="sheet-actions">
+          <button className="btn primary" onClick={onClose}>Continuar jogando</button>
+          <button className="btn" onClick={() => saveNow().then(() => setState(null))}>Salvar e ir ao menu</button>
+          <button className="btn" onClick={() => saveNow().then(exitApp)}>Salvar e fechar o app</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GameShell() {
   const { state, update, toast, toastMsg, afterMatch } = useLoadedGame();
   const [tab, setTab] = useState<Tab>('elenco');
+  const [sair, setSair] = useState(false);
   const [matchFx, setMatchFx] = useState<Fixture | null>(null);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState(false);
+  useBack(() => setTab('elenco'), NIVEL.aba, tab !== 'elenco' && !matchFx);
+  useBack(() => setSair(true), NIVEL.tela, !matchFx);
   const pending = userFixtureAtSlot(state);
   const unread = unreadCount(state);
 
@@ -165,6 +191,7 @@ function GameShell() {
       {busy && <div className="loading">Simulando rodadas...</div>}
       {summary && <SeasonSummary state={state} onClose={() => setSummary(false)} />}
       {state.coach.fired && <Fired />}
+      {sair && <ExitSheet onClose={() => setSair(false)} />}
       {!!state.pendingArt?.length && !busy && (
         <ArtOverlay art={state.pendingArt[0]} onClose={() => update((s) => { s.pendingArt = s.pendingArt?.slice(1); })} />
       )}
@@ -181,6 +208,7 @@ function Root() {
   const [saves, setSaves] = useState<SaveSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [som, setSom] = useState(getSoundPrefs().on);
+  useBack(() => setScreen('menu'), NIVEL.tela, !state && screen !== 'menu');
 
   useEffect(() => {
     if (!state && screen === 'menu') listSaves().then(setSaves);

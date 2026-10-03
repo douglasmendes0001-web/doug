@@ -17,22 +17,13 @@ const PERSONALIDADES: [Personalidade, number][] = [
   ['lider', 10], ['profissional', 35], ['temperamental', 15], ['ambicioso', 20], ['tranquilo', 20],
 ];
 
-/** Valor de mercado relativo por estrelas (índice = estrelas). */
-const STAR_VALUE = [1, 0.9, 1, 1.15, 1.5, 2, 3, 4.5];
+// Valor de mercado, salário e arredondamento ficam na economia (em euro).
+export { marketValue, monthlySalary, roundMoney } from './economy';
+import { marketValue, monthlySalary } from './economy';
 
-export function marketValue(force: number, age: number, stars = 2): number {
-  const ageFactor = age <= 21 ? 1.3 : age <= 26 ? 1.15 : age <= 29 ? 1 : age <= 31 ? 0.7 : 0.4;
-  const raw = 0.25 * Math.pow(Math.max(1, force), 4.2) * ageFactor * (STAR_VALUE[stars] ?? 1);
-  return roundMoney(Math.max(20_000, raw));
-}
-
-export function monthlySalary(value: number): number {
-  return roundMoney(value * 0.006 + 3_000);
-}
-
-export function roundMoney(v: number): number {
-  if (v >= 1_000_000) return Math.round(v / 1000) * 1000;
-  return Math.round(v / 100) * 100;
+/** Recalcula valor e salário mínimo pelo país do clube atual. */
+export function revalue(p: Player, country?: CountryCode) {
+  p.value = marketValue(p.force, p.age, p.stars, p.potential, country);
 }
 
 function pickNat(rng: Rng, clubCountry: CountryCode): CountryCode {
@@ -112,7 +103,7 @@ export function createPlayer(
   const growth = age < 24 ? (24 - age) * rng.range(0.6, 2.4) : 0;
   const potential = Math.round(clamp(force + growth, force, 135));
   const starCap = age <= 21 && stars < 5 && rng.chance(0.25) ? stars + 1 : stars;
-  const value = marketValue(force, age, stars);
+  const value = marketValue(force, age, stars, potential, clubCountry);
   const p: Player = {
     id,
     name: playerName(rng, nat),
@@ -141,7 +132,7 @@ export function createPlayer(
     seasonAssists: 0,
     benchStreak: 0,
     value,
-    salary: monthlySalary(value),
+    salary: monthlySalary(value, clubCountry),
     forSale: false,
     contractUntil: (opts.year ?? 2026) + rng.int(0, 3),
   };

@@ -9,6 +9,7 @@ import { fixtureRoundLabel } from '../../engine/standings';
 import type { Fixture, GameState, Player } from '../../engine/types';
 import { CLIMA_LABEL, altitudeGap } from '../../engine/weather';
 import { useLoadedGame } from '../game';
+import { NIVEL, useBack } from '../back';
 import { boo, crowdSet, crowdStart, crowdStop, goalRoar, groan, ooh, whistle } from '../sound';
 
 interface Props {
@@ -128,6 +129,13 @@ export function MatchScreen({ fixture, onDone, onBack }: Props) {
     if (!sim.finished) crowdSet(sim.crowdIntensity() + (sim.half === 2 && sim.minute >= 75 ? 0.15 : 0));
   }, [evCount, phase, sim, side]);
   useEffect(() => () => crowdStop(), []);
+  // Voltar: antes do jogo volta ao elenco; durante, pausa (ou fecha as substituições); no fim, continua.
+  useBack(() => {
+    if (phase === 'pre') onBack();
+    else if (showSubs) { setShowSubs(false); setSubOut(null); }
+    else if (phase === 'end') finish(false);
+    else setRunning(false);
+  }, NIVEL.tela);
   const kickoff = () => {
     whistle(1);
     crowdStart(fixture.neutral ? 0.2 : sim.crowdIntensity());

@@ -1,18 +1,26 @@
 // Administração do clube: finanças, estádio, CT, ingressos e mercado.
 
-import { leagueById } from './data/ligas';
+import { baseTicketPrice as ingressoBase, clubRevenue, clubSize, custoPorLugar } from './economy';
 import { formatMoney, pushMessage } from './inbox';
 import { roundMoney } from './players';
 import { clamp } from './rng';
 import type { Club, GameState } from './types';
 
-export function clubEco(club: Club): number {
-  if (club.leagueId) return leagueById(club.leagueId).eco;
-  return club.tier === 9 ? 0.01 : 0.3;
+/** Ingresso de referência (€) — o preço praticado pela liga. */
+export function baseTicketPrice(club: Club): number {
+  return ingressoBase(club);
 }
 
-export function baseTicketPrice(club: Club): number {
-  return Math.round(40 + 25 * Math.min(clubEco(club), 3));
+/** Parte da receita anual que entra como cotas de TV e receitas comerciais. */
+export const PARTE_TV = 0.52;
+/** Custos fixos (funcionários, viagens, dívidas, administração) em relação à receita. */
+export const PARTE_CUSTOS = 0.28;
+
+/** Receitas e despesas fixas por semana (sem salários, patrocínios e bilheteria). */
+export function weeklyFixed(club: Club): { tv: number; custos: number } {
+  const rev = clubRevenue(club);
+  const custos = rev * PARTE_CUSTOS + club.stadium.capacity * 60 + club.ct * rev * 0.01;
+  return { tv: roundMoney((rev * PARTE_TV) / 52), custos: roundMoney(custos / 52) };
 }
 
 export function logFinance(state: GameState, label: string, amount: number) {
@@ -29,10 +37,10 @@ export function weeklySalaries(state: GameState, club: Club): number {
 /** Receitas e despesas semanais do clube do usuário. */
 export function weeklyFinance(state: GameState) {
   const club = state.clubs[state.userClubId];
-  const eco = clubEco(club);
-  logFinance(state, 'Cotas de TV e patrocínio', roundMoney(1_200_000 * eco + 15_000));
+  const fixo = weeklyFixed(club);
+  logFinance(state, 'Cotas de TV e receitas comerciais', fixo.tv);
   logFinance(state, 'Folha salarial', -roundMoney(weeklySalaries(state, club)));
-  logFinance(state, 'Manutenção do estádio e CT', -roundMoney((club.stadium.capacity * 1.5 + club.ct * 30_000) * Math.max(eco, 0.05)));
+  logFinance(state, 'Custos fixos (funcionários, viagens, estádio e CT)', -fixo.custos);
   // Obras concluídas.
   const exp = club.stadium.expansion;
   if (exp && state.slot >= exp.readySlot) {
@@ -64,7 +72,7 @@ export function homeGate(state: GameState, bigGame: boolean): { attendance: numb
 export const EXPANSOES = [2000, 5000, 10000];
 
 export function expansionCost(club: Club, seats: number): number {
-  return roundMoney(seats * 1500 * clamp(clubEco(club), 0.15, 3));
+  return roundMoney(seats * custoPorLugar(club));
 }
 
 export function expandStadium(state: GameState, seats: number): string {
@@ -78,7 +86,7 @@ export function expandStadium(state: GameState, seats: number): string {
 }
 
 export function ctUpgradeCost(club: Club): number {
-  return roundMoney(3_000_000 * club.ct * club.ct * clamp(clubEco(club), 0.1, 3));
+  return roundMoney(250_000 * club.ct * club.ct * clubSize(club));
 }
 
 export function upgradeCT(state: GameState): string {
@@ -93,5 +101,5 @@ export function upgradeCT(state: GameState): string {
 }
 
 export function setTicketPrice(state: GameState, price: number) {
-  state.clubs[state.userClubId].ticketPrice = clamp(Math.round(price), 5, 2000);
+  state.clubs[state.userClubId].ticketPrice = clamp(Math.round(price), 1, 500);
 }

@@ -3,7 +3,13 @@ import { experienceLabel } from '../../engine/coach';
 import {
   EXPANSOES, baseTicketPrice, ctUpgradeCost, expandStadium, expansionCost, setTicketPrice, upgradeCT, weeklySalaries,
 } from '../../engine/clubOps';
-import { clubEco } from '../../engine/clubOps';
+import { NOME_MOEDA, SIMBOLO, clubRevenue, moedaDoPais } from '../../engine/economy';
+import { cambio } from '../../engine/money';
+import { weeklyFixed } from '../../engine/clubOps';
+import { useState } from 'react';
+import { NIVEL, useBack } from '../back';
+import { ClubCrest } from '../components/Art';
+import { Gallery } from './Gallery';
 import { roundMoney } from '../../engine/players';
 import { performanceLabel } from '../../engine/sponsors';
 import type { TreinoIntensidade } from '../../engine/types';
@@ -17,13 +23,44 @@ const TREINOS: { id: TreinoIntensidade; label: string; desc: string }[] = [
   { id: 'forte', label: 'Forte', desc: 'Mais preparo e evolução dos jovens, menos energia.' },
 ];
 
-export function ClubScreen() {
-  const { state, update, toast } = useLoadedGame();
-  const club = state.clubs[state.userClubId];
-  const c = state.coach;
-  const run = (fn: () => string) => { let msg = ''; update(() => { msg = fn(); }); if (msg) toast(msg); };
-  const base = baseTicketPrice(club);
+type SubAba = 'tecnico' | 'financas' | 'estrutura' | 'galeria';
+const SUBABAS: { id: SubAba; label: string }[] = [
+  { id: 'tecnico', label: 'Técnico' },
+  { id: 'financas', label: 'Finanças' },
+  { id: 'estrutura', label: 'Estrutura' },
+  { id: 'galeria', label: 'Galeria' },
+];
 
+export function ClubScreen() {
+  const { state } = useLoadedGame();
+  const club = state.clubs[state.userClubId];
+  const [aba, setAba] = useState<SubAba>('tecnico');
+  useBack(() => setAba('tecnico'), NIVEL.aba, aba !== 'tecnico');
+  return (
+    <div>
+      <div className="club-hero">
+        <ClubCrest club={club} size={46} />
+        <div style={{ minWidth: 0 }}>
+          <div className="club-hero-name">{club.name}</div>
+          <div className="small muted">{club.stadium.name} · {club.stadium.capacity.toLocaleString('pt-BR')} lugares · CT {club.ct}/5 · base {club.baseLevel}/5</div>
+        </div>
+      </div>
+      <div className="subtabs">
+        {SUBABAS.map((a) => (
+          <button key={a.id} className={`subtab ${aba === a.id ? 'active' : ''}`} onClick={() => setAba(a.id)}>{a.label}</button>
+        ))}
+      </div>
+      {aba === 'tecnico' && <TecnicoTab />}
+      {aba === 'financas' && <FinancasTab />}
+      {aba === 'estrutura' && <EstruturaTab />}
+      {aba === 'galeria' && <Gallery />}
+    </div>
+  );
+}
+
+function TecnicoTab() {
+  const { state, update } = useLoadedGame();
+  const c = state.coach;
   return (
     <div>
       <div className="panel">
@@ -75,6 +112,46 @@ export function ClubScreen() {
         </div>
         <p className="small muted">{TREINOS.find((t) => t.id === state.treino)?.desc} O nível do CT multiplica os efeitos.</p>
       </div>
+    </div>
+  );
+}
+
+function FinancasTab() {
+  const { state } = useLoadedGame();
+  const club = state.clubs[state.userClubId];
+  const rev = clubRevenue(club);
+  const fixo = weeklyFixed(club);
+  const master = state.sponsors.master?.weekly ?? 0;
+  const baseSp = state.sponsors.base.reduce((a, b) => a + b.weekly, 0);
+  const folha = weeklySalaries(state, club);
+  const saldoSemana = fixo.tv + master + baseSp - folha - fixo.custos;
+  const moeda = moedaDoPais(club.country);
+  const fx = cambio();
+  return (
+    <div>
+      <div className="stat-grid">
+        <div className="stat-tile"><div className="lbl">Saldo em caixa</div><div className={`val ${club.money < 0 ? 'neg' : ''}`}>{formatMoney(club.money)}</div></div>
+        <div className="stat-tile"><div className="lbl">Receita anual</div><div className="val">{formatMoney(rev)}</div></div>
+        <div className="stat-tile"><div className="lbl">Folha por mês</div><div className="val">{formatMoney(folha * 4.33)}</div></div>
+        <div className="stat-tile"><div className="lbl">Resultado semanal</div><div className={`val ${saldoSemana < 0 ? 'neg' : 'pos'}`}>{formatMoney(saldoSemana)}</div></div>
+      </div>
+      {moeda !== 'EUR' && (
+        <div className="panel small">
+          <b className="gold">Câmbio {state.year}:</b> € 1 = {SIMBOLO[moeda]} {fx[moeda].toFixed(2).replace('.', ',')}
+          {moeda === 'BRL' && <> · US$ 1 = R$ {(fx.BRL / fx.USD).toFixed(2).replace('.', ',')}</>}
+          <div className="muted">As finanças estão em {NOME_MOEDA[moeda]}. Negociações com a Europa são em euro e com a América do Norte em dólar, convertidas pelo câmbio do ano.</div>
+        </div>
+      )}
+      <div className="panel">
+        <h2>Por semana</h2>
+        <div className="fin-row"><span>Cotas de TV e receitas comerciais</span><span className="pos">{formatMoney(fixo.tv)}</span></div>
+        <div className="fin-row"><span>Patrocínio master</span><span className="pos">{formatMoney(master)}</span></div>
+        <div className="fin-row"><span>Patrocínios da base</span><span className="pos">{formatMoney(baseSp)}</span></div>
+        <div className="fin-row"><span>Folha salarial</span><span className="neg">-{formatMoney(folha)}</span></div>
+        <div className="fin-row"><span>Custos fixos (funcionários, viagens, estádio e CT)</span><span className="neg">-{formatMoney(fixo.custos)}</span></div>
+        <div className="fin-row total"><span>Resultado (sem bilheteria e prêmios)</span><span className={saldoSemana < 0 ? 'neg' : 'pos'}>{formatMoney(saldoSemana)}</span></div>
+        <p className="small muted">Bilheteria entra a cada jogo em casa; premiações, a cada título; vendas de jogadores, na hora.</p>
+      </div>
 
       <div className="panel">
         <h2>Patrocínios</h2>
@@ -99,6 +176,35 @@ export function ClubScreen() {
         </p>
       </div>
 
+      <FinanceLog />
+    </div>
+  );
+}
+
+function FinanceLog() {
+  const { state } = useLoadedGame();
+  return (
+    <div className="panel">
+      <h2>Últimos lançamentos</h2>
+      {state.financeLog.slice(0, 20).map((f, i) => (
+        <div key={i} className="fin-row small">
+          <span>{f.label}</span>
+          <span className={f.amount >= 0 ? 'pos' : 'neg'}>{formatMoney(f.amount)}</span>
+        </div>
+      ))}
+      {state.financeLog.length === 0 && <div className="small muted">Nenhum lançamento ainda.</div>}
+    </div>
+  );
+}
+
+function EstruturaTab() {
+  const { state, update, toast } = useLoadedGame();
+  const club = state.clubs[state.userClubId];
+  const run = (fn: () => string) => { let msg = ''; update(() => { msg = fn(); }); if (msg) toast(msg); };
+  const base = baseTicketPrice(club);
+  const passo = club.ticketPrice < 20 ? 1 : 5;
+  return (
+    <div>
       <div className="panel">
         <h2>Categorias de base e investidores</h2>
         <div className="kv">
@@ -108,8 +214,8 @@ export function ClubScreen() {
         </div>
         <div className="meter"><div style={{ width: `${investFactor(club) * 100}%`, background: 'var(--gold)' }} /></div>
         <div className="btn-row" style={{ marginTop: 8 }}>
-          {[1, 5, 15].map((m) => {
-            const v = roundMoney(m * 1_000_000 * Math.max(0.05, Math.min(clubEco(club), 3)));
+          {[0.005, 0.015, 0.04].map((m) => {
+            const v = roundMoney(m * clubRevenue(club) + 20_000);
             return <button key={m} className="btn small" onClick={() => run(() => investInBase(state, v))}>Investir {formatMoney(v)}</button>;
           })}
           <button className="btn small" disabled={club.baseLevel >= 5} onClick={() => run(() => upgradeBase(state))}>
@@ -140,9 +246,9 @@ export function ClubScreen() {
         </div>
         <h3>Ingresso</h3>
         <div className="row-between">
-          <button className="btn small" onClick={() => update((s) => setTicketPrice(s, club.ticketPrice - 5))}>− 5</button>
+          <button className="btn small" onClick={() => update((s) => setTicketPrice(s, club.ticketPrice - passo))}>−</button>
           <span style={{ fontSize: 20 }}>{formatMoney(club.ticketPrice)}</span>
-          <button className="btn small" onClick={() => update((s) => setTicketPrice(s, club.ticketPrice + 5))}>+ 5</button>
+          <button className="btn small" onClick={() => update((s) => setTicketPrice(s, club.ticketPrice + passo))}>+</button>
         </div>
         <p className="small muted">Preço de referência da divisão: {formatMoney(base)}. Ingresso caro esvazia o estádio e irrita a torcida; casa cheia empurra o time.</p>
       </div>
@@ -159,21 +265,6 @@ export function ClubScreen() {
         </button>
       </div>
 
-      <div className="panel">
-        <h2>Finanças</h2>
-        <div className="kv">
-          <span className="k">Saldo</span><span>{formatMoney(club.money)}</span>
-          <span className="k">Folha salarial semanal</span><span>{formatMoney(weeklySalaries(state, club))}</span>
-        </div>
-        <h3>Últimos lançamentos</h3>
-        {state.financeLog.slice(0, 15).map((f, i) => (
-          <div key={i} className="row-between small" style={{ padding: '3px 0', borderBottom: '1px solid rgba(43,74,58,.5)' }}>
-            <span>{f.label}</span>
-            <span style={{ color: f.amount >= 0 ? '#9be7a5' : '#ff8a80' }}>{formatMoney(f.amount)}</span>
-          </div>
-        ))}
-        {state.financeLog.length === 0 && <div className="small muted">Nenhum lançamento ainda.</div>}
-      </div>
     </div>
   );
 }

@@ -1,9 +1,11 @@
 // Ciclo do jogo: novo jogo, preparação e simulação das partidas, avanço do
 // calendário dia a dia e virada de temporada.
 
+import { CAMBIO_INICIAL } from './economy';
+import { syncMoney } from './money';
 import { createCoach, initialRespeito, type CoachInput } from './coach';
 import { scheduleSeason, slotIsWeekend, slotMonth, slotWeek } from './calendar';
-import { clubEco, homeGate, logFinance, weeklyFinance } from './clubOps';
+import { homeGate, logFinance, weeklyFinance } from './clubOps';
 import {
   advanceCompetition, knockoutContext, pendingByStage, recordResult, startStage,
 } from './competitions';
@@ -23,7 +25,7 @@ import { SLOTS_PER_YEAR } from './types';
 import { generateWeather } from './weather';
 import { createWorld } from './world';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const START_YEAR = 2026;
 
 export interface NewGameOptions {
@@ -56,7 +58,9 @@ export function newGame(opts: NewGameOptions, world = createWorld(opts.seed)): G
     financeLog: [],
     mundialEdition: 0,
     sponsors: { master: null, base: [] },
+    fx: { ...CAMBIO_INICIAL },
   };
+  syncMoney(state);
   const rng = new Rng(state.rng ^ 0x2545f491);
   initialSponsors(state, rng);
   for (const id of state.clubs[opts.clubId].playerIds) {
@@ -445,7 +449,7 @@ function onCompetitionFinished(state: GameState, compId: string) {
     state.coach.confDiretoria = clamp(state.coach.confDiretoria + 20, 0, 100);
     state.coach.confTorcida = clamp(state.coach.confTorcida + 25, 0, 100);
     state.coach.experience = clamp(state.coach.experience + 3, 0, 100);
-    logFinance(state, `Premiação: campeão da ${comp.def.name}`, Math.round(comp.def.prize * Math.max(0.2, clubEco(state.clubs[u]))));
+    logFinance(state, `Premiação: campeão da ${comp.def.name}`, comp.def.prize);
     titleBonus(state, comp.def.name);
     for (const id of state.clubs[u].playerIds) state.players[id].respeito = clamp(state.players[id].respeito + 10, 0, 100);
     const club = state.clubs[u];

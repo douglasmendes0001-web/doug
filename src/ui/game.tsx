@@ -3,6 +3,7 @@
 // segue a opção do jogador: a cada alteração, ao fim de cada partida ou manual.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { syncMoney } from '../engine/money';
 import { saveGame } from '../engine/save';
 import type { AutoSave, GameState } from '../engine/types';
 
@@ -80,6 +81,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setState: (s) => {
       window.clearTimeout(saveTimer.current);
       ref.current = s;
+      if (s) syncMoney(s);
       setVersion((v) => v + 1);
       setDirty(false);
       setLastSaved(null);
@@ -89,6 +91,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     update: (fn) => {
       if (!ref.current) return;
       fn(ref.current);
+      syncMoney(ref.current);
       setVersion((v) => v + 1);
       setDirty(true);
       if (autoSaveMode(ref.current) === 'sempre') scheduleSave();

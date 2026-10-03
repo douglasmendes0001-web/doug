@@ -2,19 +2,26 @@
 // saem e mudam de valor conforme o desempenho do técnico. Numa temporada
 // brilhante surge uma marca maior — e a atual faz uma contraproposta.
 
-import { clubEco, logFinance } from './clubOps';
+import { logFinance } from './clubOps';
+import { clubRevenue } from './economy';
 import { INVESTIDORES, MARCAS_BASE, MARCAS_MASTER } from './data/marcas';
 import { formatMoney, pushMessage } from './inbox';
 import { roundMoney } from './players';
 import { clamp, type Rng } from './rng';
 import type { GameState, Sponsor } from './types';
 
-export function masterWeekly(tier: number, eco: number): number {
-  return roundMoney(120_000 * Math.pow(1.8, tier - 1) * clamp(eco, 0.02, 4));
+/** Parte da receita anual paga pelo master, por nível da marca (1-5). Flamengo × Betano ≈ 20%. */
+const PARTE_MASTER = [0, 0.07, 0.1, 0.13, 0.16, 0.2];
+/** Parte da receita anual paga por um patrocinador da base, por nível (1-3). */
+const PARTE_BASE = [0, 0.002, 0.004, 0.006];
+
+/** Valor semanal (€) do patrocínio master para um clube com essa receita anual. */
+export function masterWeekly(tier: number, revenue: number): number {
+  return roundMoney((revenue * PARTE_MASTER[clamp(tier, 1, 5)]) / 52);
 }
 
-export function baseWeekly(tier: number, eco: number): number {
-  return roundMoney(6_000 * tier * clamp(eco, 0.05, 4));
+export function baseWeekly(tier: number, revenue: number): number {
+  return roundMoney((revenue * PARTE_BASE[clamp(tier, 1, 3)]) / 52);
 }
 
 function brand(rng: Rng, list: [string, string][], exclude: string[]): [string, string] {
@@ -28,21 +35,21 @@ function usedNames(state: GameState): string[] {
 
 function makeMaster(state: GameState, rng: Rng, tier: number, years: number, exclude: string[] = []): Sponsor {
   const [name, sector] = brand(rng, MARCAS_MASTER, exclude);
-  const eco = clubEco(state.clubs[state.userClubId]);
-  return { name, sector, tier, weekly: roundMoney(masterWeekly(tier, eco) * rng.range(0.92, 1.08)), untilYear: state.year + years - 1, seasons: 0, bonusTitle: 0 };
+  const rev = clubRevenue(state.clubs[state.userClubId]);
+  return { name, sector, tier, weekly: roundMoney(masterWeekly(tier, rev) * rng.range(0.92, 1.08)), untilYear: state.year + years - 1, seasons: 0, bonusTitle: 0 };
 }
 
 function makeBase(state: GameState, rng: Rng): Sponsor {
   const [name, sector] = brand(rng, MARCAS_BASE, usedNames(state));
   const tier = rng.int(1, 3);
-  const eco = clubEco(state.clubs[state.userClubId]);
-  return { name, sector, tier, weekly: baseWeekly(tier, eco), untilYear: state.year + 1, seasons: 0, bonusTitle: 0 };
+  const rev = clubRevenue(state.clubs[state.userClubId]);
+  return { name, sector, tier, weekly: roundMoney(baseWeekly(tier, rev) * rng.range(0.9, 1.1)), untilYear: state.year + 1, seasons: 0, bonusTitle: 0 };
 }
 
 /** Patrocínios iniciais do clube do usuário (novo jogo ou novo emprego). */
 export function initialSponsors(state: GameState, rng: Rng) {
   const club = state.clubs[state.userClubId];
-  const tier = clamp(Math.round(club.reputation / 20), 1, 5);
+  const tier = clamp(Math.round(club.reputation / 22), 1, 5);
   state.sponsors = { master: makeMaster(state, rng, tier, rng.int(2, 3)), base: [] };
   const nBase = club.reputation > 60 ? 2 : 1;
   for (let i = 0; i < nBase; i++) state.sponsors.base.push(makeBase(state, rng));
@@ -94,7 +101,7 @@ const ARGUMENTOS = [
 /** Chamado na virada da temporada (antes de avançar o ano). */
 export function sponsorReview(state: GameState, rng: Rng, perf: SeasonPerformance) {
   const club = state.clubs[state.userClubId];
-  const eco = clubEco(club);
+  const rev = clubRevenue(club);
   let m = state.sponsors.master;
   if (m) m.seasons++;
 
@@ -116,7 +123,7 @@ export function sponsorReview(state: GameState, rng: Rng, perf: SeasonPerformanc
     // Temporada brilhante: uma marca maior aparece e a atual contra-ataca.
     const novoTier = clamp(m.tier + (perf.score >= 3 ? 2 : 1), 1, 5);
     const [nome, setor] = brand(rng, MARCAS_MASTER, usedNames(state));
-    const novoWeekly = roundMoney(Math.max(masterWeekly(novoTier, eco), m.weekly * 1.3) * rng.range(1, 1.15));
+    const novoWeekly = roundMoney(Math.max(masterWeekly(novoTier, rev), m.weekly * 1.3) * rng.range(1, 1.15));
     const contraWeekly = roundMoney(m.weekly + (novoWeekly - m.weekly) * rng.range(0.55, 0.9));
     const contraBonus = roundMoney(contraWeekly * rng.int(4, 10));
     const args = rng.shuffle(ARGUMENTOS.slice()).slice(0, 3).map((f) => `• ${f(m!, nome)}`).join('\n');
@@ -213,9 +220,8 @@ export function investorOffer(state: GameState, rng: Rng, lastScore: number) {
   const club = state.clubs[state.userClubId];
   if (club.ct >= 5 && club.baseLevel >= 5) return;
   if (!rng.chance(clamp(0.3 + 0.1 * lastScore + club.reputation / 400, 0.1, 0.8))) return;
-  const eco = clamp(clubEco(club), 0.05, 4);
   const kind = club.ct >= 5 ? 1 : club.baseLevel >= 5 ? 0 : rng.int(0, 1);
-  const amount = roundMoney(rng.range(8, 20) * 1_000_000 * eco);
+  const amount = roundMoney(rng.range(0.06, 0.15) * clubRevenue(club) + 200_000);
   const share = rng.int(5, 15);
   const nameIdx = rng.int(0, INVESTIDORES.length - 1);
   const alvo = kind === 0 ? `modernizar o CT (nível ${club.ct} → ${club.ct + 1})` : `as categorias de base (nível ${club.baseLevel} → ${club.baseLevel + 1}) e o treinamento dos garotos de 15 a 20 anos`;

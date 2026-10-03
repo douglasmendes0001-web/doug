@@ -34,6 +34,12 @@ export function clubTrophies(state: GameState, clubId: number): Conquista[] {
   return [...map.values()].sort((a, b) => (ORDEM[a.kind] ?? 9) - (ORDEM[b.kind] ?? 9) || b.years.length - a.years.length);
 }
 
+const SECOES: { titulo: string; kinds: CompKind[] }[] = [
+  { titulo: 'Internacionais', kinds: ['mundial', 'continental'] },
+  { titulo: 'Nacionais', kinds: ['liga', 'copa'] },
+  { titulo: 'Estaduais', kinds: ['estadual'] },
+];
+
 export function Gallery() {
   const { state } = useLoadedGame();
   const [country, setCountry] = useState<string>(state.clubs[state.userClubId].country);
@@ -69,27 +75,36 @@ export function Gallery() {
         </div>
       </div>
 
-      <div className="panel">
-        {trofeus.length === 0 ? (
+      {trofeus.length === 0 && (
+        <div className="panel">
           <p className="small muted">Nenhum título conquistado nesta carreira ainda. A sala de troféus está esperando.</p>
-        ) : (
-          <div className="gallery-grid">
-            {trofeus.map((t) => {
-              const tk = trophyKind(t.kind, t.compId);
-              const intl = tk === 'mundial' || tk.startsWith('continental');
-              return (
-                <div key={t.compId} className={`gallery-item ${intl ? 'internacional' : ''}`}>
-                  <Trophy kind={tk} size={70} id={`g-${t.compId}`} />
-                  <div className="gallery-count">{t.years.length}x</div>
-                  <div className="small"><b>{t.name}</b></div>
-                  <div className="gallery-years">{t.years.sort((a, b) => a - b).join(' · ')}</div>
-                </div>
-              );
-            })}
+        </div>
+      )}
+      {SECOES.map((sec) => {
+        const lista = trofeus.filter((t) => sec.kinds.includes(t.kind));
+        if (!lista.length) return null;
+        const n = lista.reduce((a, t) => a + t.years.length, 0);
+        return (
+          <div key={sec.titulo} className="panel">
+            <div className="row-between"><h2>{sec.titulo}</h2><span className="gallery-count small-count">{n}</span></div>
+            <div className="gallery-grid">
+              {lista.map((t) => {
+                const tk = trophyKind(t.kind, t.compId);
+                const intl = tk === 'mundial' || tk.startsWith('continental');
+                return (
+                  <div key={t.compId} className={`gallery-item ${intl ? 'internacional' : ''}`}>
+                    <Trophy kind={tk} size={64} id={`g-${t.compId}`} />
+                    <div className="gallery-count">{t.years.length}x</div>
+                    <div className="small"><b>{t.name}</b></div>
+                    <div className="gallery-years">{t.years.slice().sort((a, b) => a - b).join(' · ')}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        )}
-        <p className="small muted" style={{ marginTop: 8 }}>A galeria conta os títulos conquistados a partir do início desta carreira (títulos reais anteriores a {state.history[0]?.year ?? state.year} não entram).</p>
-      </div>
+        );
+      })}
+      <p className="small muted" style={{ margin: '0 4px 8px' }}>A galeria conta os títulos conquistados a partir do início desta carreira (títulos reais anteriores a {state.history[0]?.year ?? state.year} não entram).</p>
 
       <div className="panel">
         <h2>Lendas e ídolos do banco</h2>

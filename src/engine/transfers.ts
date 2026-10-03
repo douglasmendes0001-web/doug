@@ -5,11 +5,13 @@ import { initialRespeito } from './coach';
 import { formatDate, slotDate, slotWeek } from './calendar';
 import { logFinance } from './clubOps';
 import { PAISES } from './data/paises';
+import { moedaDoPais } from './economy';
 import { formatMoney, pushMessage } from './inbox';
+import { cambioLabel, formatDeal } from './money';
 import { marketValue, monthlySalary, roundMoney } from './players';
 import { clamp, type Rng } from './rng';
 import { investorCut } from './sponsors';
-import { FREE_AGENT, SLOTS_PER_YEAR, type CountryCode, type GameState, type Player } from './types';
+import { FREE_AGENT, SLOTS_PER_YEAR, type Club, type CountryCode, type GameState, type Player } from './types';
 
 // ---------------- Janelas ----------------
 
@@ -59,8 +61,8 @@ export function askingPrice(p: Player): number {
 }
 
 /** Salário mensal que o jogador pede para assinar/renovar. */
-export function salaryDemand(p: Player, renew = false): number {
-  let s = monthlySalary(p.value) * (1 + 0.08 * (p.stars - 2));
+export function salaryDemand(p: Player, renew = false, country?: CountryCode): number {
+  let s = monthlySalary(p.value, country) * (1 + 0.08 * (p.stars - 2));
   if (renew && p.respeito < 35) s *= 1.3;
   if (p.clubId === FREE_AGENT) s *= 1.15;
   return roundMoney(Math.max(s, p.salary * (renew ? 1.05 : 1)));
@@ -72,32 +74,64 @@ export function loanFee(p: Player): number {
 
 // ---------------- Busca ----------------
 
+export type MarketSort = 'forca' | 'valor' | 'idade' | 'jovem' | 'estrelas' | 'salario' | 'custo';
+
 export interface MarketFilters {
+  /** Parte do nome. */
+  nome?: string;
   pos?: string;
+  /** Preço máximo (€) pedido pelo clube. */
   maxPrice?: number;
+  maxSalary?: number;
   minForce?: number;
+  minStars?: number;
+  minAge?: number;
+  maxAge?: number;
+  foot?: 'D' | 'E' | 'A';
   country?: string;
+  /** Liga específica (ex.: ENG1). */
+  leagueId?: string;
   livres?: boolean;
+  sort?: MarketSort;
+  limit?: number;
 }
+
+const ORDENAR: Record<MarketSort, (a: Player, b: Player) => number> = {
+  forca: (a, b) => b.force - a.force,
+  valor: (a, b) => b.value - a.value,
+  idade: (a, b) => b.age - a.age,
+  jovem: (a, b) => a.age - b.age || b.force - a.force,
+  estrelas: (a, b) => b.stars - a.stars || b.force - a.force,
+  salario: (a, b) => a.salary - b.salary,
+  custo: (a, b) => b.force / Math.max(1, askingPrice(b)) - a.force / Math.max(1, askingPrice(a)),
+};
 
 export function searchMarket(state: GameState, f: MarketFilters): Player[] {
   const out: Player[] = [];
+  const nome = f.nome?.trim().toLowerCase();
   for (const p of state.players) {
-    if (p.retired || p.youth || p.clubId === state.userClubId) continue;
+    if (p.retired || p.youth || p.clubId === state.userClubId || p.saleAgreed) continue;
     if (f.livres) {
       if (p.clubId !== FREE_AGENT) continue;
     } else {
       const club = state.clubs[p.clubId];
-      if (!club || club.tier === 0) continue;
-      if (f.country && club.country !== f.country) continue;
+      if (!club || (club.tier === 0 && club.confed !== 'CONCACAF')) continue;
+      if (f.country === 'NA' ? club.confed !== 'CONCACAF' : f.country && club.country !== f.country) continue;
+      if (f.leagueId && club.leagueId !== f.leagueId) continue;
     }
     if (p.loan) continue;
     if (f.pos && p.pos !== f.pos) continue;
+    if (nome && !p.name.toLowerCase().includes(nome)) continue;
     if (f.minForce && p.force < f.minForce) continue;
+    if (f.minStars && p.stars < f.minStars) continue;
+    if (f.minAge && p.age < f.minAge) continue;
+    if (f.maxAge && p.age > f.maxAge) continue;
+    if (f.foot && p.foot !== f.foot) continue;
+    if (f.maxSalary !== undefined && p.salary > f.maxSalary) continue;
     if (f.maxPrice !== undefined && askingPrice(p) > f.maxPrice) continue;
     out.push(p);
   }
-  return out.sort((a, b) => b.force - a.force).slice(0, 60);
+  return out.sort(ORDENAR[f.sort ?? 'forca']).slice(0, f.limit ?? 80);
 }
 
 function removeFromClub(state: GameState, p: Player) {
@@ -130,9 +164,11 @@ export function buyPlayer(state: GameState, playerId: number, years: number): st
   const free = p.clubId === FREE_AGENT;
   const seller = free ? undefined : state.clubs[p.clubId];
   if (seller && seller.playerIds.length <= 18) return `O ${seller.name} não quer vender: elenco muito curto.`;
+  if (p.saleAgreed) return `${p.name} já está vendido ao ${state.clubs[p.saleAgreed.clubId].name}.`;
   const price = askingPrice(p);
-  if (club.money < price) return `Dinheiro insuficiente: ${seller?.name ?? 'o jogador'} pede ${formatMoney(price)}.`;
-  const salary = salaryDemand(p);
+  const moeda = seller ? moedaDoPais(seller.country) : moedaDoPais(club.country);
+  if (club.money < price) return `Dinheiro insuficiente: ${seller?.name ?? 'o jogador'} pede ${formatDeal(price, moeda)}.`;
+  const salary = salaryDemand(p, false, club.country);
   if (price > 0) logFinance(state, `Contratação de ${p.name}`, -price);
   if (seller) seller.money += price;
   movePlayer(state, p, club.id);
@@ -141,8 +177,8 @@ export function buyPlayer(state: GameState, playerId: number, years: number): st
   p.respeito = initialRespeito(state.coach, p);
   p.oportunidade = 50;
   pushMessage(state, 'midia', 'Reforço!',
-    `${club.name} anuncia ${p.name} (${p.pos}, ${p.age} anos, ${p.stars}★)${seller ? `, ex-${seller.name}, por ${formatMoney(price)}` : ', que estava sem clube'}. Contrato até dezembro de ${p.contractUntil}.`);
-  return `${p.name} contratado${price ? ` por ${formatMoney(price)}` : ''}! Salário ${formatMoney(salary)}/mês até ${p.contractUntil}.`;
+    `${club.name} anuncia ${p.name} (${p.pos}, ${p.age} anos, ${p.stars}★)${seller ? `, ex-${seller.name}, por ${formatDeal(price, moeda)}` : ', que estava sem clube'}. Contrato até dezembro de ${p.contractUntil}.`);
+  return `${p.name} contratado${price ? ` por ${formatDeal(price, moeda)}` : ''}! Salário ${formatMoney(salary)}/mês até ${p.contractUntil}.`;
 }
 
 export function loanIn(state: GameState, playerId: number): string {
@@ -171,6 +207,7 @@ export function loanOut(state: GameState, rng: Rng, playerId: number): string {
   const p = state.players[playerId];
   const club = state.clubs[state.userClubId];
   if (p.clubId !== club.id || p.loan) return '';
+  if (p.saleAgreed) return `${p.name} já está vendido e não pode ser emprestado.`;
   if (!windowOpen(state, club.country)) return `Fora da janela: ${windowLabel(state, club.country)}.`;
   if (club.playerIds.length <= 18) return 'Elenco curto demais para emprestar.';
   const destinos = state.clubs.filter((c) => c.country === club.country && c.id !== club.id && c.leagueId && c.tier >= club.tier && c.playerIds.length < 30);
@@ -183,19 +220,32 @@ export function loanOut(state: GameState, rng: Rng, playerId: number): string {
 
 export function toggleForSale(state: GameState, playerId: number) {
   const p = state.players[playerId];
-  if (p.clubId !== state.userClubId || p.loan) return;
+  if (p.clubId !== state.userClubId || p.loan || p.saleAgreed) return;
   p.forSale = !p.forSale;
+}
+
+/** Clubes da América do Norte (MLS e Liga MX) compram na própria janela, em dólar. */
+function compradoresAmericaDoNorte(state: GameState, p: Player): Club[] {
+  if (!windowOpen(state, 'USA')) return [];
+  return state.clubs.filter((c) => c.confed === 'CONCACAF' && (c.country === 'USA' || c.country === 'MEX' || c.country === 'CAN') && c.baseForce >= p.force * 0.75);
+}
+
+function textoProposta(state: GameState, buyer: Club, amount: number): string {
+  const moeda = moedaDoPais(buyer.country);
+  const cambio = cambioLabel(moeda, moedaDoPais(state.clubs[state.userClubId].country));
+  return `${formatDeal(amount, moeda)}${cambio ? ` — câmbio do ano: ${cambio}` : ''}`;
 }
 
 /** Propostas semanais, respeitando as janelas de quem compra. */
 export function weeklyOffers(state: GameState, rng: Rng) {
   const club = state.clubs[state.userClubId];
-  if (!windowOpen(state, club.country) && !windowOpen(state, 'ENG')) return;
+  youthOffers(state, rng);
+  if (!windowOpen(state, club.country) && !windowOpen(state, 'ENG') && !windowOpen(state, 'USA')) return;
   const europaAberta = windowOpen(state, 'ENG');
   for (const id of club.playerIds) {
     const p = state.players[id];
-    if (p.loan) continue;
-    const open = state.messages.some((m) => m.kind === 'proposta' && m.playerId === id && !m.resolved);
+    if (p.loan || p.saleAgreed) continue;
+    const open = state.messages.some((m) => (m.kind === 'proposta' || m.kind === 'proposta-base') && m.playerId === id && !m.resolved);
     if (open) continue;
     const destaque = p.force > club.baseForce * 1.12 || p.stars >= 4;
     const chance = p.forSale ? 0.35 : destaque ? (europaAberta ? 0.06 : 0.02) : 0;
@@ -204,14 +254,88 @@ export function weeklyOffers(state: GameState, rng: Rng) {
       && windowOpen(state, c.country) && windowOpen(state, club.country));
     // Clubes europeus só compram na janela europeia.
     const europeus = europaAberta ? state.clubs.filter((c) => c.confed === 'UEFA' && c.tier === 1 && c.baseForce >= p.force * 0.8) : [];
-    const pool = destaque && europeus.length && rng.chance(0.6) ? europeus : buyers;
+    const norteAmericanos = club.confed !== 'CONCACAF' ? compradoresAmericaDoNorte(state, p) : [];
+    const r = rng.next();
+    const pool = destaque && europeus.length && r < 0.55 ? europeus
+      : norteAmericanos.length && r < 0.75 && p.age >= 24 ? norteAmericanos
+      : buyers.length ? buyers : europeus.length ? europeus : norteAmericanos;
     if (!pool.length) continue;
     const buyer = rng.pick(pool);
-    const europeu = buyer.confed === 'UEFA' && club.confed !== 'UEFA';
-    const amount = roundMoney(p.value * rng.range(p.forSale ? 0.75 : 1.0, p.forSale ? 1.1 : 1.4) * (europeu ? 1.25 : 1));
-    pushMessage(state, 'diretoria', `${europeu ? 'Proposta da Europa' : 'Proposta'} por ${p.name}`,
-      `O ${buyer.name} oferece ${formatMoney(amount)} por ${p.name}.${europeu ? ' A janela europeia está aberta e o jogador sonha com a Europa.' : ''} A decisão é sua, professor.`,
+    const exterior = buyer.country !== club.country && buyer.confed !== club.confed;
+    const amount = roundMoney(p.value * rng.range(p.forSale ? 0.75 : 1.0, p.forSale ? 1.1 : 1.4) * (exterior ? 1.2 : 1));
+    const titulo = buyer.confed === 'UEFA' && club.confed !== 'UEFA' ? 'Proposta da Europa' : buyer.confed === 'CONCACAF' ? 'Proposta da América do Norte' : 'Proposta';
+    pushMessage(state, 'diretoria', `${titulo} por ${p.name}`,
+      `O ${buyer.name} (${PAISES[buyer.country].name}) oferece ${textoProposta(state, buyer, amount)} por ${p.name}.${exterior ? ' O jogador sonha em jogar fora do país.' : ''} A decisão é sua, professor.`,
       { playerId: p.id, kind: 'proposta', data: { amount, clubId: buyer.id }, actions: [{ id: 'aceitar', label: 'Aceitar' }, { id: 'recusar', label: 'Recusar' }] });
+  }
+}
+
+/**
+ * Clubes do exterior de olho na base brasileira. Pela regra da FIFA (artigo 19),
+ * o garoto só pode se mudar ao completar 18 anos: a venda é acertada e paga
+ * agora, mas ele continua no clube até lá.
+ */
+function youthOffers(state: GameState, rng: Rng) {
+  const club = state.clubs[state.userClubId];
+  if (club.country !== 'BRA' || !windowOpen(state, 'ENG')) return;
+  for (const id of club.youthIds) {
+    const p = state.players[id];
+    if (p.saleAgreed) continue;
+    if (state.messages.some((m) => m.kind === 'proposta-base' && m.playerId === id && !m.resolved)) continue;
+    const joia = p.legend || p.stars >= 4 || p.potential >= club.baseForce * 1.25;
+    if (!joia || !rng.chance(p.legend ? 0.12 : 0.04)) continue;
+    const pool = state.clubs.filter((c) => c.confed === 'UEFA' && c.tier === 1 && c.reputation >= 60);
+    if (!pool.length) continue;
+    const buyer = rng.pick(pool);
+    const amount = roundMoney(Math.max(p.value, 300_000) * rng.range(1.1, 1.8));
+    const anoSaida = state.year + Math.max(0, 18 - p.age);
+    const espera = p.age >= 18 ? 'Como ele já tem 18 anos, pode se mudar imediatamente.' : `Pela regra da FIFA, menores de 18 não podem se transferir para o exterior: se aceitar, o ${buyer.name} paga agora e ${p.name} continua aqui até completar 18 anos (temporada ${anoSaida}).`;
+    pushMessage(state, 'diretoria', `Europa de olho na base: ${p.name}`,
+      `O ${buyer.name} (${PAISES[buyer.country].name}) oferece ${textoProposta(state, buyer, amount)} por ${p.name} (${p.pos}, ${p.age} anos, ${p.stars}★, potencial ${Math.round(p.potential)}). ${espera}`,
+      { playerId: p.id, kind: 'proposta-base', data: { amount, clubId: buyer.id }, actions: [{ id: 'aceitar', label: 'Vender' }, { id: 'recusar', label: 'Recusar' }] });
+  }
+}
+
+/** Vendas de garotos da base: aceite, pagamento e saída aos 18 anos. */
+export function resolveYouthOffer(state: GameState, msgId: number, accept: boolean): string {
+  const m = state.messages.find((x) => x.id === msgId);
+  if (!m || m.resolved || m.playerId === undefined || !m.data) return '';
+  m.resolved = accept ? 'aceitar' : 'recusar';
+  m.read = true;
+  if (!accept) return 'Proposta recusada: o garoto segue no clube.';
+  const p = state.players[m.playerId];
+  const club = state.clubs[state.userClubId];
+  if (!club.youthIds.includes(p.id) && p.clubId !== club.id) return 'Esse jogador já não está no clube.';
+  const buyer = state.clubs[m.data.clubId];
+  const cut = investorCut(state);
+  logFinance(state, `Venda de ${p.name} (base) ao ${buyer.name}`, m.data.amount);
+  if (cut > 0) logFinance(state, `Parte dos investidores (${Math.round(cut * 100)}%) na venda de ${p.name}`, -roundMoney(m.data.amount * cut));
+  if (p.age >= 18) {
+    club.youthIds = club.youthIds.filter((x) => x !== p.id);
+    p.youth = false;
+    movePlayer(state, p, buyer.id);
+    return `${p.name} vendido ao ${buyer.name} por ${formatMoney(m.data.amount)} e já se apresenta no novo clube.`;
+  }
+  p.saleAgreed = { clubId: buyer.id, amount: m.data.amount };
+  return `Venda acertada: ${formatMoney(m.data.amount)} já entraram no caixa. ${p.name} fica até completar 18 anos e então se muda para o ${buyer.name}.`;
+}
+
+/** Virada do ano: quem tem venda acertada e completou 18 anos se muda. */
+export function agreedTransfersSeasonEnd(state: GameState) {
+  const club = state.clubs[state.userClubId];
+  for (const p of state.players) {
+    if (!p.saleAgreed || p.retired || p.age < 18) continue;
+    const buyer = state.clubs[p.saleAgreed.clubId];
+    const origem = state.clubs[p.clubId];
+    if (origem) origem.youthIds = origem.youthIds.filter((x) => x !== p.id);
+    p.youth = false;
+    p.saleAgreed = undefined;
+    movePlayer(state, p, buyer.id);
+    p.contractUntil = state.year + 4;
+    if (origem?.id === club.id) {
+      pushMessage(state, 'midia', `${p.name} se despede rumo à Europa`,
+        `Aos 18 anos, ${p.name} deixa o ${club.name} e se apresenta ao ${buyer.name}, como previa o acordo fechado quando ainda era da base.`);
+    }
   }
 }
 
@@ -231,12 +355,13 @@ export function resolveOffer(state: GameState, msgId: number, accept: boolean): 
   if (club.playerIds.length <= 16) return 'Venda bloqueada: o elenco ficaria curto demais.';
   const buyer = state.clubs[m.data.clubId];
   const cut = investorCut(state);
-  logFinance(state, `Venda de ${p.name}`, m.data.amount);
+  if (p.saleAgreed) return `${p.name} já está vendido.`;
+  logFinance(state, `Venda de ${p.name} ao ${buyer.name}`, m.data.amount);
   if (cut > 0) logFinance(state, `Parte dos investidores (${Math.round(cut * 100)}%) na venda de ${p.name}`, -roundMoney(m.data.amount * cut));
   buyer.money -= m.data.amount;
   movePlayer(state, p, buyer.id);
   p.respeito = 65;
-  return `${p.name} vendido ao ${buyer.name} por ${formatMoney(m.data.amount)}.`;
+  return `${p.name} vendido ao ${buyer.name} por ${formatDeal(m.data.amount, moedaDoPais(buyer.country))}.`;
 }
 
 // ---------------- Contratos ----------------
@@ -248,7 +373,7 @@ export function contractReminders(state: GameState) {
     const p = state.players[id];
     if (p.loan || p.contractUntil > state.year) continue;
     if (state.messages.some((m) => m.kind === 'contrato' && m.playerId === id && !m.resolved)) continue;
-    const demanda = salaryDemand(p, true);
+    const demanda = salaryDemand(p, true, club.country);
     const recusa = p.respeito < 20;
     pushMessage(state, 'jogador', `Contrato de ${p.name} termina em dezembro`,
       recusa
@@ -320,7 +445,7 @@ export function contractsSeasonEnd(state: GameState, rng: Rng) {
     }
     if (rng.chance(0.85)) {
       p.contractUntil = year + rng.int(1, 3);
-      p.salary = Math.max(p.salary, monthlySalary(marketValue(p.force, p.age, p.stars)));
+      p.salary = Math.max(p.salary, monthlySalary(marketValue(p.force, p.age, p.stars, p.potential, state.clubs[p.clubId].country), state.clubs[p.clubId].country));
     } else {
       movePlayer(state, p, FREE_AGENT);
     }

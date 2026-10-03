@@ -8,6 +8,11 @@ Tem logo próprio na tela inicial, arte de apresentação a cada clube novo, art
 a cada título (com recados da torcida, da mídia e da diretoria), homenagem de ídolo/lenda do
 clube, galeria de títulos e sons gerados na hora (apito, torcida, grito de gol, vaias).
 
+A economia segue os valores reais de 2026 em euro, com câmbio para real e dólar: receitas por liga,
+patrocínios proporcionais ao tamanho do clube, valores de mercado até € 358 milhões e salários realistas.
+No celular, a escalação é feita por toque no campo e no banco, e o botão voltar do Android navega
+dentro do app.
+
 ## Stack
 
 - **React 19 + TypeScript + Vite**: interface
@@ -66,9 +71,13 @@ src/engine/
   actions.ts     respostas às mensagens (propostas, patrocínio, contratos...)
   editor.ts      modo editor (edição de clubes e jogadores do banco de dados)
   career.ts      história do técnico como jogador, passagens, ídolo/lenda e fila de artes
+  economy.ts     moedas, câmbio, receitas por liga, valor de mercado e salários (em euro)
+  money.ts       formatação de dinheiro na moeda do clube (R$, €, US$) e conversões
+  migrations.ts  conversão de saves antigos
   save.ts        3 slots de carreira + banco do editor no IndexedDB
 src/ui/          telas no estilo Brasfoot
   sound.ts       sons com Web Audio (sem arquivos de áudio)
+  back.ts        botão voltar do Android (pilha de navegação)
   components/Art.tsx  logo, troféus, artes de boas-vindas, título e lenda (SVG)
 tests/           testes do motor
 scripts/         gerador do banco de habilidades

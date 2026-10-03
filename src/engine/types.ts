@@ -23,6 +23,8 @@ export type Clima = 'normal' | 'chuva' | 'frio' | 'calor';
 
 export interface Player {
   id: number;
+  /** Venda acertada para o exterior: o garoto da base só se muda ao completar 18 anos (regra da FIFA). */
+  saleAgreed?: { clubId: number; amount: number };
   name: string;
   nat: CountryCode;
   pos: Pos;
@@ -96,6 +98,8 @@ export interface Club {
   ct: number;
   ctUpgradeReadySlot?: number;
   money: number;
+  /** Piso da receita anual (€), definido na criação do mundo. */
+  revenueFloor?: number;
   ticketPrice: number;
   playerIds: number[];
   /** Força média de referência (usada para geração e para IA). */
@@ -388,6 +392,8 @@ export interface SeasonRecord {
 }
 
 export interface GameState {
+  /** Câmbio do ano (quanto vale € 1 em reais e dólares). */
+  fx?: { BRL: number; USD: number };
   version: number;
   seed: number;
   rng: number;

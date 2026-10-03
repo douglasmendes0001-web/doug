@@ -13,6 +13,7 @@ import { createWorld, type World } from '../../engine/world';
 import { Flag } from '../components/Flag';
 import { formatMoney } from '../format';
 import { PlayerRow } from './Squad';
+import { NIVEL, useBack } from '../back';
 
 const POSICOES: Pos[] = ['G', 'LD', 'ZG', 'LE', 'VOL', 'MEI', 'ATA'];
 const PAISES_COM_CLUBES = [...new Set(LIGAS.map((l) => l.country))];
@@ -32,6 +33,7 @@ function NumField({ label, value, min, max, onChange }: { label: string; value: 
 }
 
 function PlayerEditor({ world, id, onChange, onClose }: { world: World; id: number; onChange: () => void; onClose: () => void }) {
+  useBack(onClose, NIVEL.folha);
   const p = world.players[id];
   const [filtro, setFiltro] = useState('');
   const [erro, setErro] = useState('');
@@ -140,6 +142,7 @@ export function ClubEditor({ world, clubId, onChange, onBack, onPlayerAdded }: C
   const club = world.clubs[clubId];
   const [selected, setSelected] = useState<number | null>(null);
   const [novoPos, setNovoPos] = useState<Pos>('ATA');
+  useBack(onBack, NIVEL.aba);
   const players = club.playerIds.map((id) => world.players[id]).sort((a, b) => POS_ORDER[a.pos] - POS_ORDER[b.pos] || b.force - a.force);
   const youth = (club.youthIds ?? []).map((id) => world.players[id]).filter((p) => !p.retired);
   const edit = (e: Parameters<typeof editClub>[2]) => { editClub(world, clubId, e); onChange(); };
@@ -177,9 +180,9 @@ export function ClubEditor({ world, clubId, onChange, onBack, onPlayerAdded }: C
             <input className="input" type="number" key={`c${clubId}`} defaultValue={club.stadium.capacity} onBlur={(e) => edit({ capacity: Number(e.target.value) })} />
           </div>
           <div className="form-field">
-            <label>Caixa ({formatMoney(club.money)})</label>
+            <label>Caixa ({formatMoney(club.money, 'EUR')})</label>
             <input className="input" type="number" key={`m${clubId}`} defaultValue={Math.round(club.money / 1_000_000)} onBlur={(e) => edit({ money: Number(e.target.value) * 1_000_000 })} />
-            <span className="small muted">em milhões</span>
+            <span className="small muted">em milhões de euros (o jogo converte para a moeda do clube)</span>
           </div>
         </div>
         <div className="small muted">Força média do elenco: <b>{Math.round(club.baseForce)}</b> · {players.length} jogadores</div>

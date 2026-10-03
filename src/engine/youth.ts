@@ -3,15 +3,16 @@
 // (patrocínios de base, investidores e aportes do clube).
 
 import { initialRespeito } from './coach';
-import { clubEco, logFinance } from './clubOps';
+import { logFinance } from './clubOps';
+import { clubRevenue, clubSize } from './economy';
 import { formatMoney, pushMessage } from './inbox';
 import { createPlayer, marketValue, monthlySalary, roundMoney, rollStars, SQUAD_TEMPLATE, syncAbilities, STAR_LABEL } from './players';
 import { clamp, type Rng } from './rng';
 import type { Club, GameState, Player } from './types';
 
-/** 0-1: quanto o investimento da temporada pesa (Série A: ~15M enche a barra). */
+/** 0-1: quanto o investimento da temporada pesa (≈ 4% da receita anual enche a barra). */
 export function investFactor(club: Club): number {
-  return clamp(club.baseInvest / (15_000_000 * clamp(clubEco(club), 0.05, 4)), 0, 1);
+  return clamp(club.baseInvest / (clubRevenue(club) * 0.04 + 150_000), 0, 1);
 }
 
 /** Probabilidade de cada garoto da safra ser uma joia lendária. */
@@ -34,8 +35,8 @@ function createLegend(rng: Rng, state: GameState, club: Club, id: number): Playe
   p.legend = true;
   p.starCap = lvl >= 4 ? 7 : 6;
   p.personality = rng.chance(0.5) ? 'ambicioso' : 'lider';
-  p.value = marketValue(p.force, p.age, Math.max(lvl, 5));
-  p.salary = roundMoney(monthlySalary(p.value) * 0.25);
+  p.value = marketValue(p.force, p.age, Math.max(lvl, 5), p.potential, club.country);
+  p.salary = roundMoney(monthlySalary(p.value, club.country) * 0.25);
   return p;
 }
 
@@ -56,7 +57,8 @@ export function youthIntake(state: GameState, rng: Rng) {
       p = createPlayer(rng, id, club.id, club.country, pos, base, { age: rng.int(15, 17), stars, year: state.year });
       p.potential = Math.round(clamp(p.force + rng.range(8, 20 + 5 * club.baseLevel + 15 * inv), p.force, 130));
       if (stars < 5 && rng.chance(0.3 + inv * 0.3)) p.starCap = stars + 1;
-      p.salary = roundMoney(monthlySalary(p.value) * 0.25);
+      p.value = marketValue(p.force, p.age, p.stars, p.potential, club.country);
+      p.salary = roundMoney(monthlySalary(p.value, club.country) * 0.25);
     }
     p.youth = true;
     p.nat = club.country;
@@ -108,8 +110,8 @@ export function promoteYouth(state: GameState, id: number): string {
   club.youthIds = club.youthIds.filter((x) => x !== id);
   club.playerIds.push(id);
   p.youth = false;
-  p.value = marketValue(p.force, p.age, p.stars);
-  p.salary = Math.max(p.salary, roundMoney(monthlySalary(p.value) * 0.6));
+  p.value = marketValue(p.force, p.age, p.stars, p.potential, club.country);
+  p.salary = Math.max(p.salary, roundMoney(monthlySalary(p.value, club.country) * 0.6));
   p.oportunidade = 40;
   return `${p.name} foi promovido ao time profissional!`;
 }
@@ -117,6 +119,7 @@ export function promoteYouth(state: GameState, id: number): string {
 export function releaseYouth(state: GameState, id: number): string {
   const club = state.clubs[state.userClubId];
   const p = state.players[id];
+  if (p.saleAgreed) return `${p.name} já está vendido ao ${state.clubs[p.saleAgreed.clubId].name} e sai aos 18 anos.`;
   club.youthIds = club.youthIds.filter((x) => x !== id);
   p.retired = true;
   return `${p.name} foi dispensado da base.`;
@@ -132,7 +135,7 @@ export function investInBase(state: GameState, amount: number): string {
 }
 
 export function baseUpgradeCost(club: Club): number {
-  return roundMoney(2_000_000 * club.baseLevel * club.baseLevel * clamp(clubEco(club), 0.1, 3));
+  return roundMoney(150_000 * club.baseLevel * club.baseLevel * clubSize(club));
 }
 
 export function upgradeBase(state: GameState): string {

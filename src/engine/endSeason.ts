@@ -1,15 +1,17 @@
 // Virada de temporada: campeões, acesso/rebaixamento, vagas continentais,
 // evolução/aposentadoria dos jogadores e avaliação do técnico.
 
+import { CAMBIO_INICIAL, SIMBOLO, moedaDoPais, oscilarCambio } from './economy';
+import { syncMoney } from './money';
 import { initialRespeito } from './coach';
 import { aggregateRanking, finalRanking } from './competitions';
 import { LIGAS, VAGAS_CONMEBOL, VAGAS_UEFA, lowerLeague, type LeagueSeed } from './data/ligas';
 import { pushMessage } from './inbox';
 import { autoLineup } from './lineup';
-import { SQUAD_TEMPLATE, createPlayer, marketValue, monthlySalary } from './players';
+import { SQUAD_TEMPLATE, createPlayer, marketValue, monthlySalary, roundMoney } from './players';
 import { Rng, clamp } from './rng';
 import { initialSponsors, sponsorReview, type SeasonPerformance } from './sponsors';
-import { contractsSeasonEnd } from './transfers';
+import { agreedTransfersSeasonEnd, contractsSeasonEnd } from './transfers';
 import { starGrowth, youthSeasonEnd } from './youth';
 import { IDADE_TETO, closeStint, openStint, stintSeasonEnd } from './career';
 import type { Competition, CountryCode, GameState, Player, SeasonRecord } from './types';
@@ -53,9 +55,22 @@ export function endSeason(state: GameState) {
   state.lastPerformance = score;
   if (!state.coach.fired) sponsorReview(state, rng, perf);
 
+  // Câmbio do próximo ano: afeta as negociações com a Europa (€) e a América do Norte (US$).
+  const antes = state.fx ?? { ...CAMBIO_INICIAL };
+  const fx = oscilarCambio(state, rng);
+  syncMoney(state);
+  const moeda = moedaDoPais(state.clubs[state.userClubId].country);
+  if (moeda !== 'EUR') {
+    const varia = ((fx[moeda] - antes[moeda]) / antes[moeda]) * 100;
+    pushMessage(state, 'midia', 'Câmbio para a nova temporada',
+      `O euro fecha o ano a ${SIMBOLO[moeda]} ${fx[moeda].toFixed(2).replace('.', ',')} (${varia >= 0 ? '+' : ''}${varia.toFixed(1).replace('.', ',')}%)${moeda === 'BRL' ? ` e o dólar a R$ ${(fx.BRL / fx.USD).toFixed(2).replace('.', ',')}` : ''}. ` +
+      (varia >= 0 ? `Com o ${moeda === 'BRL' ? 'real' : 'dólar'} mais fraco, vender para a Europa rende mais e contratar lá fica mais caro.` : 'Com a moeda mais forte, reforços da Europa ficam mais baratos.'));
+  }
+
   contractsSeasonEnd(state, rng);
   youthSeasonEnd(state, rng);
   developPlayers(state, rng);
+  agreedTransfersSeasonEnd(state);
   for (const club of state.clubs) {
     const top = club.playerIds.map((id) => state.players[id].force).sort((a, b) => b - a).slice(0, 16);
     if (top.length) club.baseForce = top.reduce((s, f) => s + f, 0) / top.length;
@@ -110,6 +125,8 @@ function promotionRelegation(state: GameState): { subiu: boolean; caiu: boolean 
     club.leagueId = m.leagueId;
     club.tier = m.tier;
     club.reputation = clamp(club.reputation + (promotedUp ? 8 : -8), 5, 100);
+    // Rebaixado perde parte das receitas garantidas (TV, patrocínios).
+    if (!promotedUp && club.revenueFloor) club.revenueFloor = Math.round(club.revenueFloor * 0.7);
     if (m.clubId === u) {
       pushMessage(state, promotedUp ? 'torcida' : 'diretoria', promotedUp ? 'ACESSO!' : 'Rebaixamento',
         promotedUp
@@ -173,8 +190,8 @@ function developPlayers(state: GameState, rng: Rng) {
       p.force = Math.round(clamp(p.force, 1, 135));
       p.age++;
       starGrowth(rng, p);
-      p.value = marketValue(p.force, p.age, p.stars);
-      p.salary = Math.max(p.salary, monthlySalary(p.value) * 0.8);
+      p.value = marketValue(p.force, p.age, p.stars, p.potential, club.country);
+      p.salary = Math.max(p.salary, monthlySalary(p.value, club.country) * 0.8);
       p.seasonGoals = 0;
       p.seasonGames = 0;
       p.yellowCards = 0;
@@ -248,8 +265,8 @@ export function heirOf(rng: Rng, state: GameState, p: Player, clubId: number): P
     contractUntil: state.year + 3,
     youth: clubId === state.userClubId || undefined,
   };
-  h.value = marketValue(h.force, h.age, h.stars);
-  h.salary = monthlySalary(h.value);
+  h.value = marketValue(h.force, h.age, h.stars, h.potential, club.country);
+  h.salary = roundMoney(monthlySalary(h.value, club.country) * 0.25);
   state.players.push(h);
   if (h.youth) club.youthIds.push(h.id);
   else club.playerIds.push(h.id);
@@ -274,6 +291,7 @@ export function takeJob(state: GameState, clubId: number) {
   coach.confDiretoria = 60;
   coach.confTorcida = 50;
   state.userClubId = clubId;
+  syncMoney(state);
   for (const id of state.clubs[clubId].playerIds) state.players[id].respeito = initialRespeito(coach, state.players[id]);
   state.lineup = autoLineup(state.clubs[clubId].playerIds.map((id) => state.players[id]), '4-4-2');
   initialSponsors(state, new Rng(state.rng ^ clubId));

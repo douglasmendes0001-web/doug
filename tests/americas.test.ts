@@ -68,7 +68,7 @@ describe('América do Norte', () => {
     void generico;
     s.version = 3;
     migrarSave(s);
-    expect(s.version).toBe(4);
+    expect(s.version).toBe(5);
     expect(s.clubs.filter((c) => c.leagueId === 'USA1')).toHaveLength(30);
     expect(s.clubs.filter((c) => c.leagueId === 'MEX1')).toHaveLength(18);
     expect(s.clubs.find((c) => c.name === 'Seattle Falcons')!.tier).toBe(-1);

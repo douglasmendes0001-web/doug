@@ -6,6 +6,7 @@
 // fôlego, respeito pelo técnico, ritmo de jogo, adequação de posição, mando
 // de campo/torcida, clima, altitude e o impacto de cada substituição.
 
+import { ENERGIA_EXAUSTO, gastoPorMinuto } from './development';
 import { ESTILOS, execucaoTatica, modsEfetivos, taticaById, type EstiloId, type TaticaId } from './data/estilos';
 import { HABILIDADES, type CondicaoHabilidade, type EfeitoHabilidade } from './data/habilidades';
 import { PAISES } from './data/paises';
@@ -131,13 +132,15 @@ export interface SideState {
   pressureLevel: number;
 }
 
-const BASE_DRAIN = 0.42;
+/** Ajuste geral do gasto de energia (o gasto de cada jogador vem de development.ts). */
+const DRAIN_SCALE = 1;
 /** Teto assintótico da vantagem relativa (log). Evita placares absurdos entre divisões muito distantes. */
 const RATIO_CAP = Math.log(2.2);
 const CHANCE_BASE = 0.104;
 const GOAL_BASE = 0.27;
 /** Multiplicador de rendimento por estrelas (índice = estrelas). 4-5 desequilibram; 6-7 são lendários. */
-const STAR_MULT = [1, 0.99, 1, 1.015, 1.05, 1.08, 1.12, 1.17];
+/** Peso das estrelas no rendimento: 5★ ou mais fazem diferença. */
+const STAR_MULT = [1, 0.99, 1, 1.015, 1.04, 1.1, 1.16, 1.23];
 
 /** Comprime razões de força: 1,5 → ~1,45; 2 → ~1,74; 5 → ~2,14. */
 export function softRatio(r: number): number {
@@ -306,7 +309,8 @@ export class MatchSim {
 
   eff(side: SideState, f: OnField): number {
     const p = f.p;
-    const fitness = 0.65 + 0.35 * (p.energy / 100);
+    // Abaixo de 30% de energia o jogador está exausto: o rendimento despenca.
+    const fitness = (0.65 + 0.35 * (p.energy / 100)) * (p.energy < ENERGIA_EXAUSTO ? 0.85 : 1);
     const moral = 0.9 + 0.2 * (p.respeito / 100);
     const ritmo = 0.95 + 0.07 * (p.oportunidade / 100);
     const sub = 1 + 0.12 * f.mod;
@@ -429,8 +433,9 @@ export class MatchSim {
     for (const s of this.sides) {
       for (const f of s.onField) {
         const p = f.p;
-        let d = BASE_DRAIN * s.drainMult;
-        if (p.age > 30) d *= 1 + (p.age - 30) * 0.02;
+        // Gasto calibrado pela idade e estrelas: quem "aguenta" chega ao fim
+        // dos 90 minutos; os demais ficam exaustos antes (ver minutosDeFolego).
+        let d = gastoPorMinuto(p) * DRAIN_SCALE * s.drainMult;
         d /= f.mult[E.stamina] * f.mult[E.stamina];
         d *= 1.15 - 0.3 * (p.treino / 100);
         if (f.pos === 'G') d *= 0.35;
@@ -755,7 +760,7 @@ export class MatchSim {
     this.sides.forEach((side, i) => {
       if (side.ctx.isUser) return;
       const tired = side.onField
-        .filter((f) => f.pos !== 'G' && (f.injured || f.p.energy < 62) && f.enteredAt === 0)
+        .filter((f) => f.pos !== 'G' && (f.injured || f.p.energy < 45) && f.enteredAt === 0)
         .sort((a, b) => a.p.energy - b.p.energy)
         .slice(0, 2);
       for (const f of tired) this.autoReplace(i as 0 | 1, f);

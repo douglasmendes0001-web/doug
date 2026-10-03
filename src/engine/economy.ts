@@ -147,7 +147,13 @@ const CURVA_VALOR: [number, number][] = [
   [110, 45_000_000], [120, 70_000_000], [135, 120_000_000],
 ];
 
-const STAR_VALUE = [1, 0.8, 1, 1.15, 1.35, 1.6, 2, 2.4];
+/**
+ * Prêmio de classe dos craques: as estrelas seguem a força (5★ a partir de
+ * 60), então o prêmio é contínuo pela força para não haver saltos entre faixas.
+ */
+function premioClasse(force: number): number {
+  return 1 + Math.max(0, force - 60) / 70;
+}
 
 /** Visibilidade do mercado: a mesma força vale mais na Premier League do que na Grécia. */
 const MERCADO_PAIS: Partial<Record<CountryCode, number>> = {
@@ -196,7 +202,8 @@ export function roundMoney(v: number): number {
 export function marketValue(force: number, age: number, stars = 2, potential?: number, country?: CountryCode): number {
   const promessa = potential !== undefined && potential > force ? (potential - force) * (age <= 20 ? 0.6 : age <= 23 ? 0.35 : 0) : 0;
   const mercado = country ? MERCADO_PAIS[country] ?? (PAISES[country]?.confed === 'UEFA' ? 0.4 : 0.45) : 1;
-  const v = curva(force + promessa) * fatorIdade(age) * (STAR_VALUE[stars] ?? 1) * mercado;
+  void stars; // as estrelas já estão embutidas na força (starsForForce)
+  const v = curva(force + promessa) * fatorIdade(age) * premioClasse(force) * mercado;
   return roundMoney(clamp(v, 5_000, VALOR_MAXIMO));
 }
 

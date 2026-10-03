@@ -11,7 +11,8 @@ const coach = { name: 'Teste', age: 40, exPlayer: false, career: null, titulosCa
 
 describe('economia realista', () => {
   it('valores de mercado respeitam o teto europeu de € 358 mi', () => {
-    expect(marketValue(135, 22, 7, 135, 'ENG')).toBe(VALOR_MAXIMO);
+    expect(marketValue(135, 22, 7, 135, 'ENG')).toBeGreaterThan(300_000_000);
+    expect(marketValue(135, 19, 7, 200, 'ENG')).toBeLessThanOrEqual(VALOR_MAXIMO);
     const w = createWorld(3);
     const max = Math.max(...w.players.map((p) => p.value));
     expect(max).toBeLessThanOrEqual(VALOR_MAXIMO);
@@ -76,7 +77,7 @@ describe('migração de save antigo', () => {
     s.fx = undefined;
     for (const p of s.players) p.value = 999_999_999;
     migrarSave(s);
-    expect(s.version).toBe(4);
+    expect(s.version).toBe(5);
     expect(s.fx?.BRL).toBeGreaterThan(5);
     expect(Math.max(...s.players.map((p) => p.value))).toBeLessThanOrEqual(VALOR_MAXIMO);
     expect(s.sponsors.master).toBeTruthy();

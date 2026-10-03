@@ -1,6 +1,7 @@
 // Ciclo do jogo: novo jogo, preparação e simulação das partidas, avanço do
 // calendário dia a dia e virada de temporada.
 
+import { recuperacao, weeklyDevelopment } from './development';
 import { CAMBIO_INICIAL } from './economy';
 import { syncMoney } from './money';
 import { createCoach, initialRespeito, type CoachInput } from './coach';
@@ -25,7 +26,7 @@ import { SLOTS_PER_YEAR } from './types';
 import { generateWeather } from './weather';
 import { createWorld } from './world';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const START_YEAR = 2026;
 
 export interface NewGameOptions {
@@ -390,7 +391,7 @@ function autoUserSubs(sim: MatchSim, side: 0 | 1) {
     sim.step();
     if (sim.half === 2 && [60, 70, 80].includes(sim.minute)) {
       const s = sim.sides[side];
-      const tired = s.onField.filter((f) => f.pos !== 'G' && (f.injured || f.p.energy < 60)).sort((a, b) => a.p.energy - b.p.energy).slice(0, 2);
+      const tired = s.onField.filter((f) => f.pos !== 'G' && (f.injured || f.p.energy < 45)).sort((a, b) => a.p.energy - b.p.energy).slice(0, 2);
       for (const f of tired) {
         const repl = s.bench.find((p) => p.pos === f.p.pos) ?? s.bench.find((p) => p.pos !== 'G');
         if (repl) sim.substitute(side, f.p.id, repl.id);
@@ -427,6 +428,7 @@ export function playSlot(state: GameState): SlotReport {
     weeklyPlayerRequests(state, rng);
     weeklyOffers(state, rng);
     weeklyTraining(state);
+    weeklyDevelopment(state, rng);
   }
   state.slot++;
   let seasonEnded = false;
@@ -474,11 +476,10 @@ function dailyRecovery(state: GameState) {
   const userClub = state.clubs[state.userClubId];
   const treinoBonus = state.treino === 'leve' ? 6 : state.treino === 'forte' ? -5 : 0;
   for (const club of state.clubs) {
-    const base = 14 + club.ct * 2;
     const isUser = club === userClub;
     for (const id of club.playerIds) {
       const p = state.players[id];
-      p.energy = Math.min(100, p.energy + base + (isUser ? treinoBonus : 0));
+      p.energy = Math.min(100, p.energy + recuperacao(p, club.ct) + (isUser ? treinoBonus : 0));
       if (p.injuredSlots > 0) p.injuredSlots--;
     }
   }
@@ -491,10 +492,6 @@ function weeklyTraining(state: GameState) {
   for (const id of club.playerIds) {
     const p = state.players[id];
     p.treino = clamp(p.treino + delta * ctMult, 20, 100);
-    // Jovens evoluem durante a temporada com treino e CT.
-    if (p.age <= 23 && p.force < p.potential) {
-      p.force = Math.min(p.potential, p.force + 0.08 * ctMult * (state.treino === 'forte' ? 1.4 : state.treino === 'leve' ? 0.6 : 1));
-    }
   }
 }
 

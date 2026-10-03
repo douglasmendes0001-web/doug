@@ -23,6 +23,8 @@ export type Clima = 'normal' | 'chuva' | 'frio' | 'calor';
 
 export interface Player {
   id: number;
+  /** Jogos da temporada já contados na evolução semanal. */
+  devGames?: number;
   /** Venda acertada para o exterior: o garoto da base só se muda ao completar 18 anos (regra da FIFA). */
   saleAgreed?: { clubId: number; amount: number };
   name: string;
@@ -175,7 +177,25 @@ export interface PlayerCareer {
   games: number;
   goals: number;
   assists: number;
-  clubs: { name: string; clubId?: number; titles: Record<string, number> }[];
+  clubs: {
+    name: string;
+    clubId?: number;
+    country?: CountryCode;
+    titles: Record<string, number>;
+    /** Anos no clube (início e fim). */
+    anos?: [number, number];
+    jogos?: number;
+    gols?: number;
+    assistencias?: number;
+    /** Virou lenda/ídolo do clube como jogador. */
+    lenda?: boolean;
+  }[];
+  /** Posição em que jogava. */
+  posicao?: string;
+  /** Nível do jogador: comum, bom, craque ou lenda. */
+  nivel?: 'comum' | 'bom' | 'craque' | 'lenda';
+  /** Passagem pela seleção. */
+  selecao?: { jogos: number; gols: number; assistencias: number; lenda?: boolean };
   /** Títulos pela seleção (ex.: Copa do Mundo → 1). */
   national: Record<string, number>;
   /** Prêmios individuais (ex.: Bola de Ouro → 2). */

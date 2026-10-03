@@ -5,8 +5,8 @@ import { COPAS, LIGAS } from './data/ligas';
 import { PAISES } from './data/paises';
 import { NOMES_ESTADUAIS } from './data/brasil';
 import { pushMessage } from './inbox';
-import { clamp } from './rng';
-import type { ArtEvent, Club, CoachStint, CountryCode, GameState, Honra, PlayerCareer } from './types';
+import { clamp, type Rng } from './rng';
+import type { ArtEvent, CarreiraJogador, Club, CoachStint, CountryCode, GameState, Honra, PlayerCareer } from './types';
 
 /** Idade a partir da qual o técnico para de envelhecer (e pode seguir quantas temporadas quiser). */
 export const IDADE_TETO = 80;
@@ -97,6 +97,13 @@ export function openStint(state: GameState, clubId: number) {
     pushMessage(state, 'torcida', honor === 'lenda' ? 'A LENDA VOLTOU!' : 'O ídolo está de volta',
       `${coach.name} está de volta ao ${club.name}! A arquibancada nunca esqueceu o que você fez por este clube.`);
   }
+  if (!honor && idoloComoJogador(coach, club)) {
+    // Ídolo dos tempos de jogador: a torcida recebe de braços abertos.
+    coach.confTorcida = clamp(coach.confTorcida + 15, 0, 100);
+    for (const id of club.playerIds) state.players[id].respeito = clamp(state.players[id].respeito + 6, 0, 100);
+    pushMessage(state, 'torcida', 'Nosso ídolo agora é o técnico!',
+      `${coach.name} fez história com a camisa do ${club.name} como jogador. Agora volta para comandar o time da beira do campo!`);
+  }
   pushArt(state, { type: 'welcome', clubId, coach: coach.name, year: state.year, honor });
 }
 
@@ -143,4 +150,159 @@ export function stintSeasonEnd(state: GameState): Honra | undefined {
     `A diretoria aprovou uma homenagem permanente: ${coach.name} passa a constar na galeria de ${novo === 'lenda' ? 'lendas' : 'ídolos'} do ${club.name}, mesmo que um dia deixe o clube.`);
   pushArt(state, { type: 'legend', clubId: s.clubId, coach: coach.name, year: state.year, honor: novo, seasons: s.seasons, titles: t });
   return novo;
+}
+
+// ---------------- Sorteio da história como jogador ----------------
+
+export const SORTEIOS_HISTORIA = 5;
+
+const POSICOES_JOGADOR: [string, number, number, number][] = [
+  // posição, peso, gols por jogo, assistências por jogo (jogador "bom")
+  ['Goleiro', 8, 0.002, 0.004], ['Zagueiro', 18, 0.06, 0.03], ['Lateral', 14, 0.05, 0.12],
+  ['Volante', 14, 0.06, 0.08], ['Meia', 22, 0.2, 0.25], ['Atacante', 24, 0.45, 0.15],
+];
+
+const NIVEIS: { id: NonNullable<PlayerCareer['nivel']>; peso: number; q: number; mult: number }[] = [
+  { id: 'comum', peso: 45, q: 0, mult: 0.7 },
+  { id: 'bom', peso: 35, q: 1, mult: 1 },
+  { id: 'craque', peso: 14, q: 2, mult: 1.3 },
+  { id: 'lenda', peso: 6, q: 3, mult: 1.6 },
+];
+
+export const NIVEL_LABEL: Record<NonNullable<PlayerCareer['nivel']>, string> = {
+  comum: 'Jogador comum', bom: 'Bom jogador', craque: 'Craque', lenda: 'Lenda do futebol',
+};
+
+type TipoTitulo = 'liga' | 'copa' | 'estadual' | 'continental' | 'continental2' | 'mundial';
+
+function tipoTitulo(nome: string): TipoTitulo {
+  if (nome === 'Mundial de Clubes') return 'mundial';
+  if (/Libertadores|Liga dos Campeões/.test(nome)) return 'continental';
+  if (/Sul-Americana|Liga Europa|Conferência|Concacaf/.test(nome)) return 'continental2';
+  if (nome.startsWith('Campeonato ') && !/Brasileiro/.test(nome)) return 'estadual';
+  if (/Copa|Taça|Open Cup|Championship|Pokal/.test(nome)) return 'copa';
+  return 'liga';
+}
+
+/**
+ * Sorteia a carreira de jogador do técnico: posição, nível, clubes (do Brasil
+ * ou do exterior; 30% de chance de cada clube ser de nível mundial), números,
+ * títulos por clube, passagem pela seleção e prêmios.
+ */
+export function sortearCarreira(
+  clubs: Club[], nat: CountryCode, tipo: CarreiraJogador, idadeTecnico: number, rng: Rng, prestigio: (c: Club) => number,
+): PlayerCareer {
+  const [posicao, , golsBase, assistBase] = rng.weighted(POSICOES_JOGADOR, (x) => x[1]);
+  const nivel = rng.weighted(NIVEIS, (n) => n.peso);
+  const anoAtual = 2026;
+  const inicio = anoAtual - idadeTecnico + rng.int(17, 19);
+  const fim = Math.min(anoAtual - 1, inicio + rng.int(13, 20) + (nivel.q >= 2 ? rng.int(0, 3) : 0));
+  const anos = Math.max(4, fim - inicio + 1);
+
+  // Clubes: um só ou de 2 a 6; anos repartidos ao acaso.
+  const nClubes = tipo === 'umClube' ? 1 : Math.min(anos, rng.int(2, 6));
+  const cortes = new Set<number>();
+  while (cortes.size < nClubes - 1) cortes.add(rng.int(1, anos - 1));
+  const marcos = [0, ...[...cortes].sort((a, b) => a - b), anos];
+
+  const candidatos = clubs.filter((c) => c.tier >= 0 && c.tier <= 3 && c.playerIds.length > 0);
+  const mundiais = candidatos.filter((c) => prestigio(c) >= 4);
+  const usados = new Set<number>();
+  const escolherClube = (): Club => {
+    let pool: Club[];
+    if (mundiais.length && rng.chance(0.3)) pool = mundiais;
+    else {
+      const emCasa = candidatos.filter((c) => c.country === nat);
+      pool = emCasa.length && rng.chance(0.55) ? emCasa : candidatos.filter((c) => c.country !== nat);
+      // Craques jogam em clubes fortes; jogadores comuns, em qualquer um.
+      pool = pool.filter((c) => (nivel.q >= 2 ? c.tier <= 1 : nivel.q === 1 ? c.tier <= 2 : true));
+    }
+    pool = pool.filter((c) => !usados.has(c.id));
+    if (!pool.length) pool = candidatos.filter((c) => !usados.has(c.id));
+    const c = rng.weighted(pool, (x) => Math.pow(Math.max(5, x.baseForce) / 50, 1 + nivel.q));
+    usados.add(c.id);
+    return c;
+  };
+
+  const pc: PlayerCareer = { games: 0, goals: 0, assists: 0, clubs: [], national: {}, individual: {}, posicao, nivel: nivel.id };
+  for (let i = 0; i < nClubes; i++) {
+    const club = escolherClube();
+    const a0 = inicio + marcos[i];
+    const a1 = inicio + marcos[i + 1] - 1;
+    const temporadas = a1 - a0 + 1;
+    const jogos = Math.round(temporadas * rng.int(22, 46) * rng.range(0.7, 1));
+    const gols = Math.round(jogos * golsBase * nivel.mult * rng.range(0.6, 1.3));
+    const assistencias = Math.round(jogos * assistBase * nivel.mult * rng.range(0.6, 1.3));
+    const forca = clamp(club.baseForce / 100, 0.1, 1.2);
+    const pres = prestigio(club);
+    const titles: Record<string, number> = {};
+    let conquistas = 0;
+    for (let t = 0; t < temporadas; t++) {
+      for (const nome of clubTitleOptions(club)) {
+        const tipoT = tipoTitulo(nome);
+        let p = 0;
+        if (tipoT === 'liga') p = 0.04 + 0.18 * forca + 0.03 * nivel.q;
+        else if (tipoT === 'copa') p = 0.03 + 0.1 * forca + 0.02 * nivel.q;
+        else if (tipoT === 'estadual') p = 0.08 + 0.2 * forca;
+        // Títulos internacionais são raros para jogadores comuns.
+        else if (tipoT === 'continental') p = (pres >= 3 ? 0.02 + 0.03 * nivel.q : 0.005) * [0.4, 1, 1.3, 1.6][nivel.q];
+        else if (tipoT === 'continental2') p = (pres >= 2 ? 0.03 + 0.02 * nivel.q : 0.01) * [0.4, 1, 1.3, 1.6][nivel.q];
+        else if (tipoT === 'mundial') p = (pres >= 4 ? 0.01 + 0.015 * nivel.q : 0) * [0.3, 1, 1.3, 1.6][nivel.q];
+        // Ligas com dois torneios (Apertura/Clausura) dividem a chance.
+        if (/Apertura|Clausura|Torneo/.test(nome)) p *= 0.6;
+        if (rng.chance(p)) {
+          titles[nome] = (titles[nome] ?? 0) + 1;
+          conquistas++;
+        }
+      }
+    }
+    const lenda = temporadas >= 5 && (conquistas >= 3 || gols >= 100 || (nivel.q >= 2 && rng.chance(0.5)) || rng.chance(0.15));
+    pc.clubs.push({ name: club.name, clubId: club.id, country: club.country, titles, anos: [a0, a1], jogos, gols, assistencias, lenda: lenda || undefined });
+    pc.games += jogos;
+    pc.goals += gols;
+    pc.assists += assistencias;
+  }
+
+  // Seleção.
+  const chamado = [0.08, 0.35, 0.8, 1][nivel.q];
+  if (rng.chance(chamado)) {
+    const faixa: [number, number][] = [[1, 8], [5, 40], [30, 95], [70, 150]];
+    const jogos = rng.int(...faixa[nivel.q]);
+    const gols = Math.round(jogos * golsBase * nivel.mult * 0.7 * rng.range(0.5, 1.3));
+    const assistencias = Math.round(jogos * assistBase * nivel.mult * 0.7 * rng.range(0.5, 1.3));
+    const peso = nat === 'BRA' ? 1.5 : nat === 'ARG' || nat === 'GER' || nat === 'FRA' || nat === 'ESP' || nat === 'ITA' ? 1.3 : 0.6;
+    const [copa, continental, confed, olimpiada, sub20] = titulosSelecao(nat);
+    const chance: [string, number, number][] = [
+      [copa, [0, 0.03, 0.15, 0.35][nivel.q] * peso, 1],
+      [continental, [0.02, 0.15, 0.4, 0.6][nivel.q] * peso, 3],
+      [confed, [0, 0.08, 0.2, 0.3][nivel.q] * peso, 2],
+      [olimpiada, [0, 0.04, 0.1, 0.15][nivel.q] * peso, 1],
+      [sub20, [0.02, 0.1, 0.2, 0.25][nivel.q] * peso, 1],
+    ];
+    for (const [nome, p, max] of chance) {
+      if (rng.chance(Math.min(0.9, p))) pc.national[nome] = rng.int(1, max);
+    }
+    const lenda = nivel.q === 3 || (jogos >= 60 && (gols >= 30 || !!pc.national[copa]));
+    pc.selecao = { jogos, gols, assistencias, lenda: lenda || undefined };
+  }
+
+  // Prêmios individuais.
+  const premios: [string, number[]][] = [
+    ['Bola de Ouro', [0, 0, 0.03, 0.3]],
+    ['Melhor jogador do mundo (FIFA)', [0, 0, 0.03, 0.3]],
+    ['Chuteira de Ouro', [0, 0, posicao === 'Atacante' ? 0.08 : 0, posicao === 'Atacante' ? 0.3 : 0]],
+    ['Artilheiro de campeonato', [0.01, 0.08, 0.3, 0.6].map((x) => (posicao === 'Atacante' || posicao === 'Meia' ? x : x * 0.1))],
+    ['Melhor jogador de campeonato', [0.01, 0.06, 0.3, 0.6]],
+    ['Revelação do ano', [0.03, 0.12, 0.3, 0.5]],
+    ['Seleção do campeonato', [0.05, 0.3, 0.7, 0.9]],
+  ];
+  for (const [nome, ps] of premios) {
+    if (rng.chance(ps[nivel.q])) pc.individual[nome] = rng.int(1, nivel.q >= 2 ? 3 : 1);
+  }
+  return pc;
+}
+
+/** O técnico foi ídolo deste clube como jogador? */
+export function idoloComoJogador(coach: { playerCareer?: PlayerCareer }, club: Club): boolean {
+  return !!coach.playerCareer?.clubs.some((c) => c.lenda && c.name === club.name && (!c.country || c.country === club.country));
 }

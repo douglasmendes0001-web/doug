@@ -44,6 +44,25 @@ function randomAge(rng: Rng): number {
 
 export const STAR_LABEL = ['', 'Comum', 'Bom', 'Muito bom', 'Desequilibrante', 'Craque', 'Lendário', 'Lenda viva'];
 
+/**
+ * Estrelas pela força: 7★ de 105 em diante, 6★ de 90 a 104, 5★ de 60 a 89
+ * (craques que fazem diferença); abaixo de 60, de 1★ a 4★. Força baixa nunca
+ * tem 6 ou 7 estrelas.
+ */
+export function starsForForce(force: number): number {
+  const f = Math.round(force);
+  if (f >= 105) return 7;
+  if (f >= 90) return 6;
+  if (f >= 60) return 5;
+  if (f >= 48) return 4;
+  if (f >= 35) return 3;
+  if (f >= 20) return 2;
+  return 1;
+}
+
+/** Força mínima de cada classe (índice = estrelas). */
+export const FORCA_MINIMA_ESTRELAS = [0, 0, 20, 35, 48, 60, 90, 105];
+
 /** 1-3 estrelas: 4 habilidades; 4-5: 5; 6-7: 6. */
 export function abilityCount(stars: number): number {
   return stars <= 3 ? 4 : stars <= 5 ? 5 : 6;
@@ -96,13 +115,14 @@ export function createPlayer(
   // Jovens costumam estar abaixo do auge; veteranos também.
   if (age <= 20) force -= spread * 0.6;
   if (age >= 34) force -= spread * 0.4;
-  const stars = opts.stars ?? rollStars(rng, (force - baseForce) / spread);
-  // Estrelas altas puxam a força para cima dentro do clube.
-  if (stars >= 4) force += spread * (stars - 3) * 0.35;
+  // Talento: os craques do elenco ficam acima da média do clube.
+  const talento = opts.stars ?? rollStars(rng, (force - baseForce) / spread);
+  if (talento >= 4) force += spread * (talento - 3) * 0.35;
   force = Math.round(clamp(force, 1, 130));
   const growth = age < 24 ? (24 - age) * rng.range(0.6, 2.4) : 0;
   const potential = Math.round(clamp(force + growth, force, 135));
-  const starCap = age <= 21 && stars < 5 && rng.chance(0.25) ? stars + 1 : stars;
+  const stars = starsForForce(force);
+  const starCap = Math.max(stars, starsForForce(potential));
   const value = marketValue(force, age, stars, potential, clubCountry);
   const p: Player = {
     id,
@@ -114,7 +134,7 @@ export function createPlayer(
     potential,
     stars,
     starCap,
-    legend: stars >= 6 || undefined,
+    legend: undefined,
     abilities: [],
     style: rng.pick(ESTILOS_POR_POS[pos]),
     foot: rollFoot(rng, pos),

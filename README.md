@@ -19,6 +19,10 @@ aceitam clubes de reputação intercontinental ou mundial. A América do Norte t
 canadense, U.S. Open Cup, Canadian Championship, Leagues Cup e Concacaf Champions Cup, com vaga no
 Mundial de Clubes.
 
+As estrelas seguem a força (5★ de 60 a 89, 6★ de 90 a 104, 7★ de 105 em diante), o fôlego depende da
+idade e da classe, a força evolui semana a semana (jovens que jogam e treinam crescem mais rápido) e a
+história do técnico como jogador é sorteada, com 5 chances.
+
 ## Stack
 
 - **React 19 + TypeScript + Vite**: interface
@@ -81,6 +85,7 @@ src/engine/
   economy.ts     moedas, câmbio, receitas por liga, valor de mercado e salários (em euro)
   money.ts       formatação de dinheiro na moeda do clube (R$, €, US$) e conversões
   migrations.ts  conversão de saves antigos
+  development.ts evolução semanal (força, estrelas), fôlego e recuperação
   prestige.ts    prestígio internacional dos clubes e a regra dos craques das 5 grandes ligas
   save.ts        3 slots de carreira + banco do editor no IndexedDB
 src/ui/          telas no estilo Brasfoot

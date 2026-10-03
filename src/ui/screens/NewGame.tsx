@@ -4,10 +4,11 @@ import { LIGAS } from '../../engine/data/ligas';
 import { PAISES } from '../../engine/data/paises';
 import { SLOTS, listSaves, loadEditorWorld, type SaveSummary } from '../../engine/save';
 import { newGame } from '../../engine/season';
-import { careerTotals } from '../../engine/career';
+import { SORTEIOS_HISTORIA, careerTotals, sortearCarreira } from '../../engine/career';
+import { Rng } from '../../engine/rng';
 import type { AutoSave, CarreiraJogador, CountryCode, PlayerCareer } from '../../engine/types';
 import { createWorld, type World } from '../../engine/world';
-import { CareerBuilder, emptyCareer } from '../components/CareerBuilder';
+import { CareerDraw } from '../components/CareerDraw';
 import { Flag } from '../components/Flag';
 import { PRESTIGIO_LABEL, prestigioHistorico } from '../../engine/prestige';
 import { useGame } from '../game';
@@ -43,7 +44,9 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
   const [nat, setNat] = useState<CountryCode>('BRA');
   const [exPlayer, setExPlayer] = useState(false);
   const [career, setCareer] = useState<CarreiraJogador>('variosClubes');
-  const [pc, setPc] = useState<PlayerCareer>(emptyCareer);
+  const [sorteios, setSorteios] = useState<PlayerCareer[]>([]);
+  const [escolhida, setEscolhida] = useState(-1);
+  const pc: PlayerCareer | undefined = sorteios[escolhida];
   const [country, setCountry] = useState<CountryCode>('BRA');
   const [leagueId, setLeagueId] = useState('BRA1');
   const [clubId, setClubId] = useState<number | null>(null);
@@ -59,6 +62,15 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
   const clubs = world.clubs.filter((c) => c.leagueId === leagueId).sort((a, b) => b.baseForce - a.baseForce);
   const isEx = age >= IDADE_EX_JOGADOR && exPlayer;
   const coachInput = { name, age, nat, exPlayer: isEx, career, titulosCarreira: careerTotals(pc).total > 0, playerCareer: isEx ? pc : undefined };
+  const sortear = () => {
+    if (sorteios.length >= SORTEIOS_HISTORIA) return;
+    const rng = new Rng((Date.now() ^ (Math.random() * 1e9)) | 0);
+    const novo = sortearCarreira(world.clubs, nat, career, age, rng, prestigioHistorico);
+    setSorteios((l) => [...l, novo]);
+    setEscolhida(sorteios.length);
+  };
+  // Depois do primeiro sorteio, nacionalidade e tipo de carreira ficam travados.
+  const travado = sorteios.length > 0;
   const exp = initialExperience(coachInput);
   const expSemHistoria = initialExperience({ ...coachInput, titulosCarreira: false, playerCareer: undefined });
   const club = clubId !== null ? world.clubs[clubId] : null;
@@ -97,7 +109,7 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
             <label>Nacionalidade</label>
             <div className="row-between" style={{ gap: 8 }}>
               <Flag country={nat} />
-              <select className="sel" style={{ flex: 1 }} value={nat} onChange={(e) => setNat(e.target.value as CountryCode)}>
+              <select className="sel" style={{ flex: 1 }} value={nat} disabled={sorteios.length > 0} onChange={(e) => setNat(e.target.value as CountryCode)}>
                 {NACIONALIDADES.map((c) => <option key={c} value={c}>{PAISES[c].name}</option>)}
               </select>
             </div>
@@ -118,15 +130,15 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
                   <div className="form-field">
                     <label>Carreira como jogador</label>
                     <div className="choice-row">
-                      <button className={`choice ${career === 'variosClubes' ? 'on' : ''}`} onClick={() => setCareer('variosClubes')}>Passou por vários clubes</button>
-                      <button className={`choice ${career === 'umClube' ? 'on' : ''}`} onClick={() => { setCareer('umClube'); setPc((x) => ({ ...x, clubs: x.clubs.slice(0, 1) })); }}>Ficou em um clube só</button>
+                      <button className={`choice ${career === 'variosClubes' ? 'on' : ''}`} disabled={travado} onClick={() => setCareer('variosClubes')}>Passou por vários clubes</button>
+                      <button className={`choice ${career === 'umClube' ? 'on' : ''}`} disabled={travado} onClick={() => setCareer('umClube')}>Ficou em um clube só</button>
                     </div>
                   </div>
                   <div className="form-field">
-                    <label>História como jogador</label>
-                    <span className="small muted">Jogos, gols, assistências, clubes e títulos (por clube, seleção e individuais). Títulos e prêmios aumentam a experiência e o respeito dos jogadores.</span>
+                    <label>História como jogador (sorteio)</label>
+                    <span className="small muted">Títulos, seleção e prêmios aumentam a experiência e o respeito dos jogadores. Se você foi ídolo de um clube, a torcida dele te recebe de braços abertos.</span>
                   </div>
-                  <CareerBuilder world={world} nat={nat} career={career} value={pc} onChange={setPc} />
+                  <CareerDraw sorteios={sorteios} escolhida={escolhida} onSortear={sortear} onEscolher={setEscolhida} onVoltarInicio={onCancel} />
                 </>
               )}
             </>
@@ -137,7 +149,7 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
           </div>
           <div className="btn-row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={onCancel}>Menu</button>
-            <button className="btn primary" disabled={!name.trim()} onClick={() => setStep(1)}>Escolher time</button>
+            <button className="btn primary" disabled={!name.trim() || (isEx && !pc)} onClick={() => setStep(1)}>{isEx && !pc ? 'Sorteie sua história' : 'Escolher time'}</button>
           </div>
         </div>
       )}
@@ -221,7 +233,7 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
             <span className="k">Técnico</span><span>{name}, {age} anos, {PAISES[nat].name}</span>
             <span className="k">Clube</span><span>{club.name}</span>
             <span className="k">Experiência</span><span>{experienceLabel(exp)}</span>
-            {isEx && (<><span className="k">Como jogador</span><span>{pc.games} jogos · {pc.goals} gols · {pc.assists} assist. · {careerTotals(pc).total} títulos</span></>)}
+            {isEx && pc && (<><span className="k">Como jogador</span><span>{pc.games} jogos · {pc.goals} gols · {pc.assists} assist. · {careerTotals(pc).total} títulos</span></>)}
           </div>
           <div className="btn-row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={() => setStep(1)}>Voltar</button>

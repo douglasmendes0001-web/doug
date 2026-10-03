@@ -3,7 +3,7 @@ import { handleMessageAction } from '../src/engine/actions';
 import { TATICAS, execucaoTatica, taticaById } from '../src/engine/data/estilos';
 import { HABILIDADES, HABILIDADES_POR_POS } from '../src/engine/data/habilidades';
 import { forecastCompetition } from '../src/engine/forecast';
-import { abilityCount } from '../src/engine/players';
+import { starsForForce, abilityCount } from '../src/engine/players';
 import { Rng } from '../src/engine/rng';
 import { newGame, playSlot } from '../src/engine/season';
 import { sponsorReview } from '../src/engine/sponsors';
@@ -31,9 +31,12 @@ describe('habilidades, estrelas e estilos', () => {
     }
     const total = s.players.length;
     console.log('estrelas:', counts.slice(1).map((c) => (c / total * 100).toFixed(2) + '%').join(' | '));
-    expect((counts[1] + counts[2] + counts[3]) / total).toBeGreaterThan(0.8);
-    expect(counts[6] + counts[7]).toBeGreaterThan(0);
-    expect((counts[6] + counts[7]) / total).toBeLessThan(0.01);
+    // As estrelas seguem a faixa de força: 5★ 60-89, 6★ 90-104, 7★ 105+.
+    for (const p of s.players) {
+      expect(p.stars).toBe(starsForForce(p.force));
+      if (p.force < 90) expect(p.stars).toBeLessThanOrEqual(5);
+    }
+    expect(counts[7]).toBeGreaterThan(0);
   });
 
   it('táticas complexas exigem técnico experiente', () => {
@@ -63,7 +66,7 @@ describe('base e joias lendárias', () => {
       expect(p.age).toBe(15);
       expect(p.stars).toBeGreaterThanOrEqual(1);
       expect(p.starCap).toBeGreaterThanOrEqual(6);
-      expect(p.force).toBeGreaterThanOrEqual(61);
+      expect(p.force).toBeGreaterThanOrEqual(54);
     }
   });
 });

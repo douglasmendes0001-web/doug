@@ -434,3 +434,16 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .hist-ico { width: 22px; text-align: center; }
 .fifa-tag { font-size: 10px; font-weight: 800; border-radius: 8px; padding: 2px 7px; background: rgba(255,255,255,.12); color: var(--muted); }
 .fifa-tag.ok { background: var(--gold); color: #1c1606; }
+
+/* ---------- Sorteio da história como jogador ---------- */
+.career-draw { margin-bottom: 12px; }
+.draw-card { background: var(--row); border: 2px solid var(--line); border-radius: 10px; padding: 10px; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.draw-card.on { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(230,195,92,0.2); }
+.draw-card.nivel-lenda { background: linear-gradient(160deg, rgba(230,195,92,0.18), var(--row) 60%); }
+.draw-card.nivel-craque { background: linear-gradient(160deg, rgba(78,163,95,0.18), var(--row) 60%); }
+.draw-nivel { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--gold); }
+.draw-club { border-left: 3px solid var(--line); padding: 4px 0 4px 8px; margin-top: 2px; }
+.draw-pick { text-align: center; font-size: 13px; font-weight: 700; color: var(--gold); margin-top: 4px; }
+.choice:disabled, .sel:disabled { opacity: 0.55; }
+.field-row > * { min-width: 0; }
+.field-row .sel { width: 100%; }

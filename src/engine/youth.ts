@@ -6,7 +6,7 @@ import { initialRespeito } from './coach';
 import { logFinance } from './clubOps';
 import { clubRevenue, clubSize } from './economy';
 import { formatMoney, pushMessage } from './inbox';
-import { createPlayer, marketValue, monthlySalary, roundMoney, rollStars, SQUAD_TEMPLATE, syncAbilities, STAR_LABEL } from './players';
+import { createPlayer, marketValue, monthlySalary, roundMoney, rollStars, SQUAD_TEMPLATE, starsForForce, syncAbilities, STAR_LABEL } from './players';
 import { clamp, type Rng } from './rng';
 import type { Club, GameState, Player } from './types';
 
@@ -29,13 +29,16 @@ function createLegend(rng: Rng, state: GameState, club: Club, id: number): Playe
   const weights = [40, 25, 18, 11, 6].map((w, i) => w * (1 + inv * i * 0.5));
   const lvl = rng.weighted([1, 2, 3, 4, 5], (x) => weights[x - 1]);
   const pos = rng.pick(['G', 'ZG', 'MEI', 'ATA', 'ATA', 'MEI', 'VOL', 'LD', 'LE'] as const);
-  const p = createPlayer(rng, id, club.id, club.country, pos, 60, { age: 15, stars: lvl, year: state.year });
-  p.force = 64 + 4 * lvl + rng.int(-3, 4);
-  p.potential = Math.min(135, p.force + rng.int(20, 35));
+  const p = createPlayer(rng, id, club.id, club.country, pos, 60, { age: 15, year: state.year });
+  // Joia lendária: já nasce acima da média e tem potencial para 6★ ou 7★.
+  p.force = 52 + 5 * lvl + rng.int(-3, 4);
+  p.potential = Math.min(135, (lvl >= 4 ? 108 : 92) + rng.int(0, 22));
   p.legend = true;
-  p.starCap = lvl >= 4 ? 7 : 6;
+  p.stars = starsForForce(p.force);
+  p.starCap = starsForForce(p.potential);
+  syncAbilities(rng, p);
   p.personality = rng.chance(0.5) ? 'ambicioso' : 'lider';
-  p.value = marketValue(p.force, p.age, Math.max(lvl, 5), p.potential, club.country);
+  p.value = marketValue(p.force, p.age, p.stars, p.potential, club.country);
   p.salary = roundMoney(monthlySalary(p.value, club.country) * 0.25);
   return p;
 }
@@ -56,7 +59,7 @@ export function youthIntake(state: GameState, rng: Rng) {
       const stars = rollStars(rng, -0.6 + inv + club.baseLevel * 0.15);
       p = createPlayer(rng, id, club.id, club.country, pos, base, { age: rng.int(15, 17), stars, year: state.year });
       p.potential = Math.round(clamp(p.force + rng.range(8, 20 + 5 * club.baseLevel + 15 * inv), p.force, 130));
-      if (stars < 5 && rng.chance(0.3 + inv * 0.3)) p.starCap = stars + 1;
+      p.starCap = Math.max(p.stars, starsForForce(p.potential));
       p.value = marketValue(p.force, p.age, p.stars, p.potential, club.country);
       p.salary = roundMoney(monthlySalary(p.value, club.country) * 0.25);
     }
@@ -86,21 +89,12 @@ export function weeklyYouthTraining(state: GameState) {
   const intens = state.treino === 'forte' ? 1.3 : state.treino === 'leve' ? 0.7 : 1;
   for (const id of club.youthIds) {
     const p = state.players[id];
-    if (p.force >= p.potential) continue;
-    p.force = Math.min(p.potential, p.force + 0.12 * mult * intens * (p.legend ? 2 : 1));
     p.energy = 100;
+    // O investimento na base acelera a evolução (além da evolução semanal normal).
+    if (p.force < p.potential) p.force = Math.min(p.potential, p.force + 0.04 * mult * intens * investFactor(club) * (p.legend ? 2 : 1));
   }
 }
 
-/** Ganho de estrelas ao fim da temporada (joias lendárias sobem mais rápido). */
-export function starGrowth(rng: Rng, p: Player) {
-  if (p.stars >= p.starCap) return;
-  const chance = p.legend ? 0.55 : p.age <= 22 ? 0.2 : 0;
-  if (rng.chance(chance)) {
-    p.stars++;
-    syncAbilities(rng, p);
-  }
-}
 
 export function promoteYouth(state: GameState, id: number): string {
   const club = state.clubs[state.userClubId];
@@ -149,12 +143,11 @@ export function upgradeBase(state: GameState): string {
 }
 
 /** Virada de ano: garotos envelhecem; quem passa de 20 sobe ou é dispensado. */
-export function youthSeasonEnd(state: GameState, rng: Rng) {
+export function youthSeasonEnd(state: GameState, _rng?: Rng) {
   const club = state.clubs[state.userClubId];
   for (const id of [...club.youthIds]) {
     const p = state.players[id];
     p.age++;
-    starGrowth(rng, p);
     if (p.age > 20) {
       if (p.force >= club.baseForce * 0.7 || p.legend) {
         const msg = promoteYouth(state, id);

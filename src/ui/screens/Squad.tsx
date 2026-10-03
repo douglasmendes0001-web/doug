@@ -4,7 +4,8 @@ import { ESTILOS, TATICAS, execucaoTatica, taticaById, type TaticaId } from '../
 import { HABILIDADES } from '../../engine/data/habilidades';
 import { CATEGORIA_LABEL, FORMACOES_PADRAO, esquemaOf, type CategoriaFormacao } from '../../engine/data/formacoes';
 import { BENCH_SIZE } from '../../engine/lineup';
-import { PE_LABEL, POS_ORDER, STAR_LABEL } from '../../engine/players';
+import { FORCA_MINIMA_ESTRELAS, PE_LABEL, POS_ORDER, STAR_LABEL } from '../../engine/players';
+import { aguentaJogoInteiro, folegoLabel } from '../../engine/development';
 import { Rng } from '../../engine/rng';
 import { squadOf } from '../../engine/season';
 import { loanOut, toggleForSale } from '../../engine/transfers';
@@ -90,6 +91,8 @@ function PlayerDetails({ p, year }: { p: Player; year: number }) {
         <span className="k">Força / potencial</span><span>{Math.round(p.force)} / {p.age <= 23 ? Math.round(p.potential) : '—'}</span>
         <span className="k">Estilo de jogo</span><span className="gold">{est.nome}</span>
         <span className="k">Pé dominante</span><span>{PE_LABEL[p.foot]}</span>
+        <span className="k">Fôlego</span><span className={aguentaJogoInteiro(p) ? 'pos' : 'gold'}>{folegoLabel(p)}</span>
+        {p.stars < 7 && (<><span className="k">Próxima estrela</span><span>força {FORCA_MINIMA_ESTRELAS[p.stars + 1]}{p.potential < FORCA_MINIMA_ESTRELAS[p.stars + 1] ? ' (acima do potencial)' : ''}</span></>)}
       </div>
       <p className="small muted" style={{ margin: '0 0 6px' }}>{est.descricao}</p>
       <h3>Habilidades ({p.abilities.length})</h3>

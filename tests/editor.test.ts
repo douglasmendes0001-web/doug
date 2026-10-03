@@ -14,10 +14,13 @@ describe('modo editor', () => {
     expect(w.clubs[clubId].playerIds).toContain(p.id);
     expect(w.players[p.id]).toBe(p);
 
+    // Estrelas seguem a força: pedir 7★ leva a força para a faixa (105+).
     editPlayer(w, p.id, { force: 99, stars: 7, style: 'ata_pivo', name: 'Craque do Editor' });
-    expect(p.force).toBe(99);
+    expect(p.force).toBe(105);
     expect(p.stars).toBe(7);
-    expect(p.legend).toBe(true);
+    editPlayer(w, p.id, { force: 99 });
+    expect(p.stars).toBe(6);
+    editPlayer(w, p.id, { stars: 7 });
     expect(p.style).toBe('ata_pivo');
     expect(p.abilities.length).toBe(abilityCount(7));
 

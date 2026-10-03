@@ -11,6 +11,7 @@ import { pushMessage } from './inbox';
 import { syncMoney } from './money';
 import { Rng } from './rng';
 import { initialSponsors } from './sponsors';
+import { abilityCount, starsForForce, syncAbilities } from './players';
 import { appendNorthAmerica } from './world';
 import { FREE_AGENT, type Club, type GameState, type Player } from './types';
 
@@ -64,11 +65,37 @@ export function migrarSave(state: GameState): GameState {
       'A partir da próxima temporada entram em campo a MLS, a Liga MX, a liga canadense, a U.S. Open Cup, o Canadian Championship, a Leagues Cup e a Concacaf Champions Cup, ' +
       'com os clubes reais. O campeão da Concachampions garante vaga no Mundial de Clubes. Clubes da MLS e da Liga MX já negociam no mercado (em dólar).');
   }
+  if (state.version === 4) {
+    migrarEstrelas(state.players, new Rng(state.rng ^ 0x57a5));
+    state.version = 5;
+    pushMessage(state, 'diretoria', 'Estrelas e fôlego atualizados',
+      'As estrelas agora seguem a força: 5★ de 60 a 89, 6★ de 90 a 104 e 7★ de 105 em diante (abaixo de 60, de 1 a 4). ' +
+      'Até os 28 anos todos aguentam os 90 minutos; depois disso só os craques (5★ até 35, 6★ até 40, 7★ até 53). ' +
+      'A força evolui toda semana: jovens que jogam e treinam crescem mais rápido.');
+  }
   return state;
+}
+
+/** Recalcula as estrelas pela faixa de força (saves até a versão 4). */
+export function migrarEstrelas(players: Player[], rng: Rng) {
+  for (const p of players) {
+    if (p.retired) continue;
+    const estrelas = starsForForce(p.force);
+    p.starCap = Math.max(estrelas, starsForForce(p.potential));
+    if (estrelas !== p.stars) {
+      p.stars = estrelas;
+      const max = abilityCount(estrelas);
+      if (p.abilities.length > max) p.abilities = p.abilities.slice(0, max);
+      else syncAbilities(rng, p);
+    }
+    if (p.legend && p.starCap < 6) p.legend = undefined;
+    p.devGames = p.seasonGames;
+  }
 }
 
 /** Banco do modo editor salvo em versões antigas. */
 export function migrarMundo(world: { clubs: Club[]; players: Player[] }, version: number, seed = 20260101) {
   if (version === 2) migrarEconomiaMundo(world.clubs, world.players);
   if (version <= 3) appendNorthAmerica(world, seed, FREE_AGENT);
+  if (version <= 4) migrarEstrelas(world.players, new Rng(seed));
 }

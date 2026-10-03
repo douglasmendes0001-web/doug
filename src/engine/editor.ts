@@ -3,7 +3,7 @@
 
 import { ESTILOS_POR_POS, type EstiloId } from './data/estilos';
 import { HABILIDADES } from './data/habilidades';
-import { abilityCount, createPlayer, marketValue, monthlySalary, syncAbilities } from './players';
+import { FORCA_MINIMA_ESTRELAS, abilityCount, createPlayer, marketValue, monthlySalary, starsForForce, syncAbilities } from './players';
 import { Rng, clamp } from './rng';
 import type { Club, CountryCode, Pe, Player, Pos } from './types';
 import type { World } from './world';
@@ -46,14 +46,22 @@ export function editPlayer(world: World, id: number, e: PlayerEdit, rng = new Rn
     syncAbilities(rng, p);
   }
   if (e.style !== undefined && ESTILOS_POR_POS[p.pos].includes(e.style)) p.style = e.style;
+  // As estrelas seguem a força: escolher estrelas leva a força para a faixa delas.
   if (e.stars !== undefined) {
-    p.stars = clamp(Math.round(e.stars), 1, 7);
-    p.starCap = Math.max(p.starCap, p.stars);
-    p.legend = p.stars >= 6 || undefined;
+    const alvo = clamp(Math.round(e.stars), 1, 7);
+    const min = FORCA_MINIMA_ESTRELAS[alvo];
+    const max = alvo < 7 ? FORCA_MINIMA_ESTRELAS[alvo + 1] - 1 : 135;
+    p.force = clamp(p.force, min, max);
+    p.potential = Math.max(p.potential, p.force);
+  }
+  const estrelas = starsForForce(p.force);
+  if (estrelas !== p.stars) {
+    p.stars = estrelas;
     const max = abilityCount(p.stars);
     if (p.abilities.length > max) p.abilities = p.abilities.slice(0, max);
     else syncAbilities(rng, p);
   }
+  p.starCap = Math.max(p.stars, starsForForce(p.potential));
   recalcValue(p, world.clubs[p.clubId]?.country);
 }
 

@@ -364,6 +364,42 @@ Jogo aéreo, Jogo pelas pontas, Ligação direta e Futebol total. Cada tática:
   pé, força mínima, estrelas mínimas, preço e salário máximos; ordena por força, custo-benefício,
   juventude, estrelas, valor ou salário.
 
+## Estrelas, fôlego e evolução
+
+- **Estrelas pela força:** 7★ de 105 em diante, 6★ de 90 a 104, 5★ de 60 a 89; abaixo de 60:
+  4★ (48–59), 3★ (35–47), 2★ (20–34) e 1★. Força baixa nunca tem 6 ou 7 estrelas. No editor, escolher
+  as estrelas leva a força para a faixa delas.
+- **5★ ou mais fazem diferença:** multiplicador de rendimento 5★ ×1,10, 6★ ×1,16, 7★ ×1,23 (antes
+  ×1,08/1,12/1,17), além de mais chance nos lances de estilo.
+- **Fôlego:** até 28 anos todo jogador aguenta os 90 minutos. Depois só os craques: 5★ até 35 anos,
+  6★ até 40 e 7★ (e joias lendárias) até 53. Cálculo: cada jogador tem "minutos de fôlego" até ficar
+  exausto (30% de energia) — 125 min até 23 anos, 115 até 28, 105 para craques dentro da idade-limite;
+  passou do limite, `78 − 2,5 × anos além do limite` (mínimo 50). Gasto por minuto =
+  `70 ÷ minutos de fôlego`, multiplicado por clima, altitude, habilidades de resistência e treino.
+  Exausto (< 30%) rende 15% menos. A IA substitui quem cai abaixo de 45%.
+- **Recuperação diária:** 14 + 2×CT, +4 até 23 anos, +2 até 28, e cai com a idade a partir dos 32
+  (craques 6★+ veteranos recuperam um pouco melhor).
+- **Evolução semanal da força:** `taxa da idade × espaço até o potencial × ritmo × CT × treino`.
+  Taxa por semana: 0,16 (até 17 anos), 0,14 (18–19), 0,12 (20–21), 0,09 (22–23), 0,055 (24–25),
+  0,03 (26–27), 0,015 (28–29), 0,006 (30–31). Ritmo: jogou na semana 1,0; relacionado sem jogar 0,45;
+  fora da lista 0,3; base 0,55 + 0,08 × nível. Treino leve 0,8 / normal 1,0 / forte 1,25; CT 0,9 a 1,3.
+  Joias lendárias evoluem 50% mais rápido. A partir dos 32 anos a força cai toda semana
+  (`0,02 + 0,012 × (idade − 31)`), mais devagar para 5★ (×0,8), 6★ (×0,55) e 7★/lendas (×0,3).
+- **Estrela nova:** ao cruzar uma faixa, o técnico recebe "Parabéns, Fulano!" com a nova classe e a nova
+  habilidade. Perder estrela só acontece 1,5 ponto abaixo da faixa (evita idas e vindas).
+- **Aposentadoria:** comuns até 43, 6★ até 45, 7★ e joias lendárias até 55.
+
+## História do técnico como jogador (sorteio)
+
+- Ex-jogadores (30+ anos) não preenchem mais a história: o jogo **sorteia** posição, nível (comum 45%,
+  bom 35%, craque 14%, lenda 6%), anos de carreira, clubes (um só ou de 2 a 6), jogos, gols e
+  assistências por clube, títulos por clube (pela força e projeção do clube), se virou **lenda** do
+  clube, convocações e títulos pela seleção (e se foi lenda nela) e prêmios individuais.
+- Cada clube tem **30% de chance de ser de nível mundial**; os demais vêm do Brasil (55%) ou do exterior.
+- São **5 chances**; o usuário escolhe a melhor história. Esgotadas, o jogo avisa: é preciso voltar à
+  tela inicial para tentar de novo. Depois do primeiro sorteio, nacionalidade e tipo de carreira travam.
+- Treinar um clube onde foi ídolo como jogador: torcida +15 e elenco +6 de respeito.
+
 ## Prestígio internacional dos clubes
 
 - Cada clube tem uma reputação fora do país: **Regional, Nacional, Continental, Intercontinental ou

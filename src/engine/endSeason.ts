@@ -13,7 +13,7 @@ import { Rng, clamp } from './rng';
 import { initialSponsors, sponsorReview, type SeasonPerformance } from './sponsors';
 import { concacafEntrants } from './seasonSetup';
 import { agreedTransfersSeasonEnd, contractsSeasonEnd } from './transfers';
-import { starGrowth, youthSeasonEnd } from './youth';
+import { youthSeasonEnd } from './youth';
 import { IDADE_TETO, closeStint, openStint, stintSeasonEnd } from './career';
 import type { Competition, CountryCode, GameState, Player, SeasonRecord } from './types';
 
@@ -180,19 +180,13 @@ function computeQualifications(state: GameState): Record<string, number[]> {
 
 function developPlayers(state: GameState, rng: Rng) {
   for (const club of state.clubs) {
-    const ctMult = 0.8 + 0.1 * club.ct;
     for (const id of [...club.playerIds]) {
       const p = state.players[id];
-      const play = clamp(p.seasonGames / 25, 0.5, 1.2);
-      if (p.age <= 23) p.force += (p.potential - p.force) * rng.range(0.15, 0.4) * ctMult * play;
-      else if (p.age <= 29) p.force += rng.range(-1, 1.5);
-      else if (p.age <= 32) p.force -= rng.range(0, 2);
-      // Lendários envelhecem devagar (jogam até 55 anos).
-      else if (p.legend || p.stars >= 6) p.force -= rng.range(0, 1.5);
-      else p.force -= rng.range(1, 4);
-      p.force = Math.round(clamp(p.force, 1, 135));
+      // A força evolui semana a semana (development.ts); aqui só a virada do ano.
       p.age++;
-      starGrowth(rng, p);
+      p.devGames = 0;
+      // Variação de forma entre temporadas para quem já atingiu o auge.
+      if (p.age >= 24 && p.age <= 30) p.force = clamp(p.force + rng.range(-0.8, 0.8), 1, 135);
       p.value = marketValue(p.force, p.age, p.stars, p.potential, club.country);
       p.salary = Math.max(p.salary, monthlySalary(p.value, club.country) * 0.8);
       p.seasonGoals = 0;
@@ -232,8 +226,9 @@ function developPlayers(state: GameState, rng: Rng) {
  * 43 anos; lendários (6-7 estrelas ou joias lendárias) até 55.
  */
 export function retirementChance(p: Player): number {
-  const lendario = p.legend || p.stars >= 6;
-  if (lendario) return p.age >= 55 ? 1 : p.age >= 40 ? (p.age - 39) * 0.06 : 0;
+  // Lendas (joias lendárias e 7★) jogam até 55; 6★ até 45; os demais até 43.
+  if (p.legend || p.stars >= 7) return p.age >= 55 ? 1 : p.age >= 40 ? (p.age - 39) * 0.06 : 0;
+  if (p.stars >= 6) return p.age >= 45 ? 1 : p.age >= 37 ? (p.age - 36) * 0.1 : 0;
   return p.age >= 43 ? 1 : p.age >= 34 ? (p.age - 33) * 0.1 : 0;
 }
 

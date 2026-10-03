@@ -1,4 +1,5 @@
-import { IDADE_TETO, careerTotals } from '../../engine/career';
+import { IDADE_TETO } from '../../engine/career';
+import { CareerCard } from '../components/CareerDraw';
 import { experienceLabel } from '../../engine/coach';
 import {
   EXPANSOES, baseTicketPrice, ctUpgradeCost, expandStadium, expansionCost, setTicketPrice, upgradeCT, weeklySalaries,
@@ -75,20 +76,11 @@ function TecnicoTab() {
           <span className="k">Objetivo da temporada</span><span className="gold">{state.seasonObjective}</span>
         </div>
         {c.titles.length > 0 && <div className="small">Títulos: {c.titles.join(' · ')}</div>}
-        {c.playerCareer && (() => {
-          const pc = c.playerCareer;
-          const t = careerTotals(pc);
-          const lista = (r: Record<string, number>) => Object.entries(r).filter(([, n]) => n > 0).map(([k, n]) => `${n}x ${k}`).join(', ');
-          return (
-            <>
-              <h3>Como jogador</h3>
-              <div className="small">{pc.games} jogos · {pc.goals} gols · {pc.assists} assistências · {t.total} títulos · {t.individuais} prêmios</div>
-              {pc.clubs.map((cl, i) => <div key={i} className="small"><b>{cl.name}</b>{lista(cl.titles) ? `: ${lista(cl.titles)}` : ''}</div>)}
-              {lista(pc.national) && <div className="small"><b>Seleção</b>: {lista(pc.national)}</div>}
-              {lista(pc.individual) && <div className="small"><b>Individuais</b>: {lista(pc.individual)}</div>}
-            </>
-          );
-        })()}
+        {c.playerCareer && (
+          <>
+            <CareerCard pc={c.playerCareer} />
+          </>
+        )}
         {!!c.history?.length && (
           <>
             <h3>Passagens como técnico</h3>

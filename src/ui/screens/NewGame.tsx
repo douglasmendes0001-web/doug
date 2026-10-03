@@ -9,6 +9,7 @@ import type { AutoSave, CarreiraJogador, CountryCode, PlayerCareer } from '../..
 import { createWorld, type World } from '../../engine/world';
 import { CareerBuilder, emptyCareer } from '../components/CareerBuilder';
 import { Flag } from '../components/Flag';
+import { PRESTIGIO_LABEL, prestigioHistorico } from '../../engine/prestige';
 import { useGame } from '../game';
 import { NIVEL, useBack } from '../back';
 
@@ -167,7 +168,7 @@ export function NewGame({ onCancel }: { onCancel: () => void }) {
           {clubs.map((c) => (
             <button key={c.id} className="club-pick" style={{ ['--c1' as string]: c.colors[0], outline: clubId === c.id ? '2px solid var(--gold)' : undefined }} onClick={() => setClubId(c.id)}>
               <Flag country={c.country} />
-              <span className="grow">{c.name}<div className="small muted">{c.city ?? c.state} · estádio {c.stadium.capacity.toLocaleString('pt-BR')} · CT {c.ct} · base {c.baseLevel}</div></span>
+              <span className="grow">{c.name} {prestigioHistorico(c) >= 3 && <span className={`prestige-badge p${prestigioHistorico(c)}`}>{PRESTIGIO_LABEL[prestigioHistorico(c)]}</span>}<div className="small muted">{c.city ?? c.state} · estádio {c.stadium.capacity.toLocaleString('pt-BR')} · CT {c.ct} · base {c.baseLevel}</div></span>
               <b style={{ fontSize: 20 }}>{Math.round(c.baseForce)}</b>
             </button>
           ))}

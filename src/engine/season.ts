@@ -25,7 +25,7 @@ import { SLOTS_PER_YEAR } from './types';
 import { generateWeather } from './weather';
 import { createWorld } from './world';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const START_YEAR = 2026;
 
 export interface NewGameOptions {

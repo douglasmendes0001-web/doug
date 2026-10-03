@@ -13,6 +13,12 @@ patrocínios proporcionais ao tamanho do clube, valores de mercado até € 358 
 No celular, a escalação é feita por toque no campo e no banco, e o botão voltar do Android navega
 dentro do app.
 
+Os clubes das Américas têm prestígio pela história real (títulos mundiais reconhecidos ou não pela
+FIFA, títulos internacionais, campanhas e ídolos lendários): craques das 5 grandes ligas europeias só
+aceitam clubes de reputação intercontinental ou mundial. A América do Norte tem MLS, Liga MX, liga
+canadense, U.S. Open Cup, Canadian Championship, Leagues Cup e Concacaf Champions Cup, com vaga no
+Mundial de Clubes.
+
 ## Stack
 
 - **React 19 + TypeScript + Vite**: interface
@@ -52,7 +58,8 @@ cd android && ./gradlew assembleDebug   # gera app/build/outputs/apk/debug/app-d
 
 ```
 src/engine/
-  data/          clubes reais (Brasil e América do Sul), ligas europeias genéricas,
+  data/          clubes reais (Brasil, América do Sul e América do Norte), ligas europeias genéricas,
+                 história real dos clubes (historia.ts),
                  formatos de competição, países, nomes, 910 habilidades por posição,
                  estilos de jogador, 12 táticas, marcas de patrocínio
   world.ts       gera clubes e elencos (força aleatória dentro da faixa de cada liga)
@@ -74,6 +81,7 @@ src/engine/
   economy.ts     moedas, câmbio, receitas por liga, valor de mercado e salários (em euro)
   money.ts       formatação de dinheiro na moeda do clube (R$, €, US$) e conversões
   migrations.ts  conversão de saves antigos
+  prestige.ts    prestígio internacional dos clubes e a regra dos craques das 5 grandes ligas
   save.ts        3 slots de carreira + banco do editor no IndexedDB
 src/ui/          telas no estilo Brasfoot
   sound.ts       sons com Web Audio (sem arquivos de áudio)

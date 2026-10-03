@@ -95,7 +95,7 @@ export const EUROPA: EuropeanCountrySeed[] = [
 ];
 
 /** Clubes de outras confederações — só aparecem no Mundial de Clubes. */
-export const MUNDO: { confed: 'AFC' | 'CAF' | 'CONCACAF' | 'OFC'; clubs: [city: string, country: CountryCode, altitude: number][] }[] = [
+export const MUNDO: { confed: 'AFC' | 'CAF' | 'OFC'; clubs: [city: string, country: CountryCode, altitude: number][] }[] = [
   {
     confed: 'AFC',
     clubs: [['Riyadh', 'KSA', 610], ['Riyadh', 'KSA', 610], ['Jeddah', 'KSA', 10], ['Tokyo', 'JPN', 40], ['Yokohama', 'JPN', 10],
@@ -105,11 +105,6 @@ export const MUNDO: { confed: 'AFC' | 'CAF' | 'CONCACAF' | 'OFC'; clubs: [city: 
     confed: 'CAF',
     clubs: [['Cairo', 'EGY', 25], ['Cairo', 'EGY', 25], ['Casablanca', 'MAR', 30], ['Casablanca', 'MAR', 30], ['Tunis', 'TUN', 10],
       ['Pretoria', 'RSA', 1340], ['Johannesburg', 'RSA', 1750], ['Alger', 'ALG', 20], ['Lagos', 'NGA', 40]],
-  },
-  {
-    confed: 'CONCACAF',
-    clubs: [['Monterrey', 'MEX', 540], ['Monterrey', 'MEX', 540], ['Guadalajara', 'MEX', 1560], ['Ciudad de México', 'MEX', 2240],
-      ['Seattle', 'USA', 50], ['Los Angeles', 'USA', 90], ['Miami', 'USA', 5], ['Toronto', 'CAN', 80], ['San José', 'CRC', 1170]],
   },
   {
     confed: 'OFC',

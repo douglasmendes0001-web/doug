@@ -423,3 +423,14 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .filter-panel .sel { width: 100%; }
 .market-line { padding: 4px 4px 2px; }
 .search-input { margin-bottom: 4px; }
+
+/* ---------- Prestígio e história ---------- */
+.prestige-badge { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .5px; border-radius: 10px; padding: 2px 8px; margin-top: 4px; vertical-align: middle; background: #2b4a3a; color: var(--text); }
+.prestige-badge.p2 { background: #1d4e89; }
+.prestige-badge.p3 { background: linear-gradient(90deg, #7a5a12, #b8932f); color: #fff; }
+.prestige-badge.p4 { background: linear-gradient(90deg, #d9b54e, #fff3c4, #d9b54e); color: #1c1606; }
+.hist-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(43,74,58,.5); font-size: 14px; }
+.hist-row .grow { flex: 1; }
+.hist-ico { width: 22px; text-align: center; }
+.fifa-tag { font-size: 10px; font-weight: 800; border-radius: 8px; padding: 2px 7px; background: rgba(255,255,255,.12); color: var(--muted); }
+.fifa-tag.ok { background: var(--gold); color: #1c1606; }

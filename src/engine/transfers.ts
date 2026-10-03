@@ -1,6 +1,7 @@
 // Mercado: janelas de transferência (europeia e sul-americana), contratos,
 // renovações, agentes livres, empréstimos, compras, vendas e propostas.
 
+import { recusaPorPrestigio } from './prestige';
 import { initialRespeito } from './coach';
 import { formatDate, slotDate, slotWeek } from './calendar';
 import { logFinance } from './clubOps';
@@ -165,6 +166,8 @@ export function buyPlayer(state: GameState, playerId: number, years: number): st
   const seller = free ? undefined : state.clubs[p.clubId];
   if (seller && seller.playerIds.length <= 18) return `O ${seller.name} não quer vender: elenco muito curto.`;
   if (p.saleAgreed) return `${p.name} já está vendido ao ${state.clubs[p.saleAgreed.clubId].name}.`;
+  const semProjecao = recusaPorPrestigio(state, club, p);
+  if (semProjecao) return semProjecao;
   const price = askingPrice(p);
   const moeda = seller ? moedaDoPais(seller.country) : moedaDoPais(club.country);
   if (club.money < price) return `Dinheiro insuficiente: ${seller?.name ?? 'o jogador'} pede ${formatDeal(price, moeda)}.`;
@@ -188,6 +191,8 @@ export function loanIn(state: GameState, playerId: number): string {
   const blocked = canTrade(state, club.country, p);
   if (blocked) return `Fora da janela: ${blocked}`;
   const owner = state.clubs[p.clubId];
+  const semProjecao = recusaPorPrestigio(state, club, p);
+  if (semProjecao) return semProjecao;
   const top = owner.playerIds.map((id) => state.players[id]).sort((a, b) => b.force - a.force).slice(0, 13).map((x) => x.id);
   if (top.includes(p.id)) return `O ${owner.name} não empresta jogadores que são titulares.`;
   if (owner.playerIds.length <= 20) return `O ${owner.name} está com elenco curto e não empresta ninguém.`;

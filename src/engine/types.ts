@@ -12,7 +12,7 @@ export type CountryCode =
   | 'BRA' | 'ARG' | 'CHI' | 'COL' | 'ECU' | 'BOL' | 'PAR' | 'PER' | 'URU' | 'VEN'
   | 'ENG' | 'ESP' | 'GER' | 'FRA' | 'ITA' | 'POR' | 'NED' | 'SCO' | 'TUR' | 'GRE'
   | 'KSA' | 'JPN' | 'KOR' | 'QAT' | 'UAE' | 'EGY' | 'MAR' | 'TUN' | 'RSA' | 'ALG' | 'NGA'
-  | 'MEX' | 'USA' | 'CAN' | 'CRC' | 'NZL';
+  | 'MEX' | 'USA' | 'CAN' | 'CRC' | 'HON' | 'GUA' | 'SLV' | 'PAN' | 'JAM' | 'NZL';
 
 /** Pé dominante: destro, canhoto ou ambidestro. */
 export type Pe = 'D' | 'E' | 'A';
@@ -114,6 +114,8 @@ export interface Club {
   investors: Investor[];
   /** Técnicos que viraram ídolos/lendas do clube (para sempre). */
   legends?: { coach: string; honor: Honra; seasons: number; titles: number; until: number }[];
+  /** Conferência na MLS (Leste/Oeste). */
+  conference?: 'Leste' | 'Oeste';
   /** Pontos dos últimos 5 jogos (3/1/0) — o "momento" do time. */
   form?: number[];
 }

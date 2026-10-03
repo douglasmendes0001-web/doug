@@ -60,6 +60,8 @@ const RECEITA: Record<string, [number, number]> = {
   FRA1: [35, 820], FRA2: [6, 35], POR1: [8, 260], POR2: [1.5, 10],
   NED1: [10, 260], NED2: [2, 12], TUR1: [12, 260], TUR2: [2, 15],
   SCO1: [5, 140], SCO2: [1, 8], GRE1: [4, 75], GRE2: [0.5, 4],
+  // MLS (Inter Miami ≈ US$ 200 mi), Liga MX (América/Monterrey ≈ US$ 100 mi) e liga canadense.
+  USA1: [35, 190], MEX1: [18, 100], CAN1: [1, 5],
 };
 
 /** Clubes sem liga no jogo (externos e só-estaduais). */
@@ -67,7 +69,7 @@ function receitaExterna(club: Club): [number, number] {
   if (club.tier === 9) return [0.03, 0.4];
   if (club.confed === 'UEFA') return [5, 60];
   if (club.confed === 'CONMEBOL') return [2, 25];
-  if (club.confed === 'CONCACAF') return [15, 120];
+  if (club.confed === 'CONCACAF') return [1, 12]; // América Central e Caribe
   return [3, 40];
 }
 
@@ -106,6 +108,8 @@ export function cupPrize(country: CountryCode): number {
 
 export const PREMIO_CONTINENTAL: Record<string, number> = {
   LIB: 21_000_000, SUD: 8_500_000, UCL: 45_000_000, UEL: 18_000_000, UECL: 8_000_000, MUN: 100_000_000,
+  // Concachampions: US$ 5 mi ao campeão; Leagues Cup: US$ 2 mi.
+  CCC: 4_300_000, LCUP: 1_700_000,
 };
 
 export function estadualPrize(uf: string): number {
@@ -149,7 +153,7 @@ const STAR_VALUE = [1, 0.8, 1, 1.15, 1.35, 1.6, 2, 2.4];
 const MERCADO_PAIS: Partial<Record<CountryCode, number>> = {
   ENG: 1.15, ESP: 1, GER: 1, ITA: 0.95, FRA: 0.95, POR: 0.45, NED: 0.45, TUR: 0.4, SCO: 0.2, GRE: 0.2,
   BRA: 1, ARG: 0.75, COL: 0.55, CHI: 0.55, ECU: 0.55, BOL: 0.35, URU: 0.5, PAR: 0.45,
-  USA: 0.7, MEX: 0.6, CAN: 0.6,
+  USA: 0.7, MEX: 0.6, CAN: 0.6, CRC: 0.3, HON: 0.25, GUA: 0.25, SLV: 0.2, PAN: 0.25, JAM: 0.2,
 };
 
 /** Clubes brasileiros e ingleses pagam mais em relação ao valor de venda. */

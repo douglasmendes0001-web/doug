@@ -15,13 +15,40 @@ export function isMundialYear(state: GameState): boolean {
   return state.settings.mundialAnual || (state.year >= PRIMEIRO_MUNDIAL && (state.year - PRIMEIRO_MUNDIAL) % 4 === 0);
 }
 
+/**
+ * Vagas da Concacaf Champions Cup (27): MLS 9 (incluindo o campeão da copa
+ * canadense), Liga MX 9 e América Central/Caribe 9. A ordem importa: os 5
+ * primeiros (campeão da MLS, da Liga MX e 3 da América Central) ganham bye.
+ */
+export function concacafEntrants(state: GameState, mlsRanking: number[], mxRanking: number[]): number[] {
+  const clubs = state.clubs;
+  const centro = clubs.filter((c) => c.confed === 'CONCACAF' && c.tier === 0)
+    .map((c) => ({ id: c.id, k: c.baseForce + ((c.id * 37 + state.year * 11) % 7) }))
+    .sort((a, b) => b.k - a.k).map((x) => x.id);
+  const copaCan = state.competitions.find((c) => c.def.id === 'COPA-CAN')?.champion;
+  const out: number[] = [];
+  const add = (id: number | undefined) => { if (id !== undefined && clubs[id] && !out.includes(id)) out.push(id); };
+  add(mlsRanking[0]);
+  add(mxRanking[0]);
+  centro.slice(0, 3).forEach(add);
+  mlsRanking.slice(1, 8).forEach(add);
+  const canadense = copaCan !== undefined && !out.includes(copaCan) ? copaCan : mlsRanking.find((id) => clubs[id].country === 'CAN' && !out.includes(id));
+  add(canadense ?? mlsRanking.find((id) => !out.includes(id)));
+  mxRanking.slice(1).forEach((id) => { if (out.filter((x) => clubs[x].leagueId === 'MEX1').length < 9) add(id); });
+  centro.slice(3, 9).forEach(add);
+  return out;
+}
+
 export function buildSeasonCompetitions(state: GameState): Competition[] {
   const comps: Competition[] = [];
   const clubs = state.clubs;
+  const ligaPorForca = (leagueId: string) => clubs.filter((c) => c.leagueId === leagueId).sort(byStrength).map((c) => c.id);
 
   // ---- Ligas ----
   for (const l of LIGAS) {
-    const teams = clubs.filter((c) => c.leagueId === l.id).sort(byStrength).map((c) => c.id);
+    const ordem = (c: Club) => (l.conferencias ? (c.conference === 'Oeste' ? 1 : 0) : 0);
+    // MLS: Leste primeiro e Oeste depois (os grupos 'ranges' viram as conferências).
+    const teams = clubs.filter((c) => c.leagueId === l.id).sort((a, b) => ordem(a) - ordem(b) || byStrength(a, b)).map((c) => c.id);
     for (const t of l.tournaments) {
       const def: CompetitionDef = {
         id: t.suffix ? `${l.id}-${t.suffix}` : l.id,
@@ -84,6 +111,30 @@ export function buildSeasonCompetitions(state: GameState): Competition[] {
   cont('UCL', 'Liga dos Campeões', 'Champions', 'UEFA', swiss(), [6, 46], PREMIO_CONTINENTAL.UCL);
   cont('UEL', 'Liga Europa', 'Liga Europa', 'UEFA', swiss(), [6, 46], PREMIO_CONTINENTAL.UEL);
   cont('UECL', 'Liga Conferência', 'Conference', 'UEFA', swiss(), [6, 46], PREMIO_CONTINENTAL.UECL);
+
+  // ---- América do Norte: Concacaf Champions Cup e Leagues Cup ----
+  // Champions Cup: 27 clubes, mata-mata em ida e volta e final única; os 5
+  // primeiros da lista (campeões) entram direto nas oitavas.
+  const ccc = (q.CCC ?? concacafEntrants(state, ligaPorForca('USA1'), ligaPorForca('MEX1'))).filter((t) => clubs[t]);
+  if (ccc.length >= 8) {
+    comps.push(createCompetition({
+      id: 'CCC', name: 'Concacaf Champions Cup', short: 'Concachampions', kind: 'continental', confed: 'CONCACAF',
+      stages: [{ type: 'ko', name: 'Mata-mata', legs: 2, finalSingle: true }],
+      window: [5, 21], prefer: 'meio', track: 'CONCACAF', prize: PREMIO_CONTINENTAL.CCC,
+    }, ccc, state.year));
+  }
+  const mls = ligaPorForca('USA1').slice(0, 16);
+  const ligaMx = ligaPorForca('MEX1').slice(0, 16);
+  if (mls.length >= 8 && ligaMx.length >= 8) {
+    comps.push(createCompetition({
+      id: 'LCUP', name: 'Leagues Cup', short: 'Leagues Cup', kind: 'copa',
+      stages: [
+        { type: 'rr', name: 'Fase de grupos', groups: 8, legs: 1, grouping: 'draw', advance: 2 },
+        { type: 'ko', name: 'Mata-mata', legs: 1 },
+      ],
+      window: [29, 34], prefer: 'any', track: 'NA-copa', prize: PREMIO_CONTINENTAL.LCUP,
+    }, [...mls, ...ligaMx].sort((a, b) => clubs[b].baseForce - clubs[a].baseForce), state.year));
+  }
 
   // ---- Mundial de Clubes ----
   if (isMundialYear(state)) {
@@ -154,10 +205,11 @@ function mundialParticipants(state: GameState): { teams: number[]; host: number 
   pickConfed('CONMEBOL', 6, 'LIB');
   pickConfed('AFC', 4);
   pickConfed('CAF', 4);
-  pickConfed('CONCACAF', 4);
+  pickConfed('CONCACAF', 4, 'CCC');
   pickConfed('OFC', 1);
   const hostConfed = HOST_ROTATION[state.mundialEdition % HOST_ROTATION.length];
-  const hostPool = clubs.filter((c) => c.confed === hostConfed && !chosen.includes(c.id)).sort(byStrength);
+  // Sede da Concacaf: um clube dos EUA (como o Inter Miami em 2025).
+  const hostPool = clubs.filter((c) => c.confed === hostConfed && !chosen.includes(c.id) && (hostConfed !== 'CONCACAF' || c.country === 'USA')).sort(byStrength);
   const host = hostPool[0]?.id ?? chosen[chosen.length - 1];
   if (hostPool[0]) chosen.push(host);
   return { teams: chosen, host };

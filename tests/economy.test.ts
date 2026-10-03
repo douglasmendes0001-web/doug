@@ -76,7 +76,7 @@ describe('migração de save antigo', () => {
     s.fx = undefined;
     for (const p of s.players) p.value = 999_999_999;
     migrarSave(s);
-    expect(s.version).toBe(3);
+    expect(s.version).toBe(4);
     expect(s.fx?.BRL).toBeGreaterThan(5);
     expect(Math.max(...s.players.map((p) => p.value))).toBeLessThanOrEqual(VALOR_MAXIMO);
     expect(s.sponsors.master).toBeTruthy();

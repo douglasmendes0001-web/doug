@@ -113,7 +113,8 @@ const POOLS: Partial<Record<CountryCode, NamePool>> = {
   ARG: HISP, CHI: HISP, COL: HISP, ECU: HISP, BOL: HISP, PAR: HISP, PER: HISP, URU: HISP, VEN: HISP,
   ESP: ES, ENG: EN, SCO: EN, GER: DE, NED: NL, FRA: FR, ITA: IT, POR: PT, TUR: TR, GRE: GR,
   KSA: AR, QAT: AR, UAE: AR, EGY: AR, MAR: AR, TUN: AR, ALG: AR,
-  JPN: EA, KOR: EA, RSA: AF, NGA: AF, MEX: NA, USA: NA, CAN: NA, CRC: NA, NZL: EN,
+  JPN: EA, KOR: EA, RSA: AF, NGA: AF, MEX: HISP, USA: NA, CAN: NA, CRC: HISP, NZL: EN,
+  HON: HISP, GUA: HISP, SLV: HISP, PAN: HISP, JAM: EN,
 };
 
 export function namePool(country: CountryCode): NamePool {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PAISES } from '../../engine/data/paises';
 import type { CompKind, GameState } from '../../engine/types';
+import { PRESTIGIO_LABEL, clubPrestige, historiaDe } from '../../engine/prestige';
 import { ClubCrest, Trophy, trophyKind } from '../components/Art';
 import { useLoadedGame } from '../game';
 
@@ -44,9 +45,11 @@ export function Gallery() {
   const { state } = useLoadedGame();
   const [country, setCountry] = useState<string>(state.clubs[state.userClubId].country);
   const [clubId, setClubId] = useState(state.userClubId);
-  const countries = useMemo(() => [...new Set(state.clubs.map((c) => c.country))], [state.clubs]);
-  const clubs = useMemo(() => state.clubs.filter((c) => c.country === country).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name)), [state.clubs, country]);
+  const countries = useMemo(() => [...new Set(state.clubs.filter((c) => c.tier >= 0).map((c) => c.country))], [state.clubs]);
+  const clubs = useMemo(() => state.clubs.filter((c) => c.country === country && c.tier >= 0).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name)), [state.clubs, country]);
   const club = state.clubs[clubId];
+  const hist = historiaDe(club);
+  const prestigio = clubPrestige(state, club);
   const trofeus = clubTrophies(state, clubId);
   const total = trofeus.reduce((s, t) => s + t.years.length, 0);
   const lendas = club.legends ?? [];
@@ -72,7 +75,28 @@ export function Gallery() {
         <div>
           <h2 style={{ margin: 0 }}>Galeria de títulos</h2>
           <div className="small">{club.name} · <b className="gold">{total}</b> título(s) desde {state.history[0]?.year ?? state.year}</div>
+          <span className={`prestige-badge p${prestigio}`}>Reputação {PRESTIGIO_LABEL[prestigio]}</span>
         </div>
+      </div>
+
+      <div className="panel">
+        <h2>Tradição e história real</h2>
+        {!hist && <p className="small muted">Sem títulos internacionais ou mundiais antes de {state.history[0]?.year ?? state.year}. A projeção vem da divisão e da reputação.</p>}
+        {hist?.mundiais?.map((m) => (
+          <div key={m.titulo + m.ano} className="hist-row">
+            <span className="hist-ico"><Trophy kind="mundial" size={18} id={`hm-${m.ano}`} /></span>
+            <span className="grow"><b>{m.titulo}</b> · {m.ano}</span>
+            <span className={`fifa-tag ${m.fifa ? 'ok' : ''}`}>{m.fifa ? 'FIFA' : 'não FIFA'}</span>
+          </div>
+        ))}
+        {hist?.internacionais?.map((t) => (
+          <div key={t} className="hist-row"><span className="hist-ico"><Trophy kind="continental" size={18} id={`hi-${t.length}`} /></span><span className="grow">{t}</span></div>
+        ))}
+        {hist?.lenda && <p className="small" style={{ marginTop: 6 }}><b className="gold">Lenda:</b> {hist.lenda}</p>}
+        <p className="small muted" style={{ marginTop: 6 }}>
+          Reputação intercontinental ou mundial é exigida pelos craques (5★ ou mais) das 5 grandes ligas europeias.
+          Ela vem de títulos internacionais/mundiais (reconhecidos pela FIFA ou não), campanhas lendárias e ídolos históricos — e também dos títulos desta carreira.
+        </p>
       </div>
 
       {trofeus.length === 0 && (

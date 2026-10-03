@@ -11,6 +11,7 @@ import { autoLineup } from './lineup';
 import { SQUAD_TEMPLATE, createPlayer, marketValue, monthlySalary, roundMoney } from './players';
 import { Rng, clamp } from './rng';
 import { initialSponsors, sponsorReview, type SeasonPerformance } from './sponsors';
+import { concacafEntrants } from './seasonSetup';
 import { agreedTransfersSeasonEnd, contractsSeasonEnd } from './transfers';
 import { starGrowth, youthSeasonEnd } from './youth';
 import { IDADE_TETO, closeStint, openStint, stintSeasonEnd } from './career';
@@ -172,6 +173,8 @@ function computeQualifications(state: GameState): Record<string, number[]> {
     res.UEL.push(...r.slice(v.ucl, v.ucl + v.uel));
     res.UECL.push(...r.slice(v.ucl + v.uel, v.ucl + v.uel + v.uecl));
   }
+  // Concacaf: campeão da MLS Cup (ou da U.S. Open Cup) e da Liga MX à frente.
+  res.CCC = concacafEntrants(state, rankingOf('USA'), rankingOf('MEX'));
   return res;
 }
 

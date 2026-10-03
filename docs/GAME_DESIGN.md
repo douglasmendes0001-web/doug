@@ -364,6 +364,46 @@ Jogo aéreo, Jogo pelas pontas, Ligação direta e Futebol total. Cada tática:
   pé, força mínima, estrelas mínimas, preço e salário máximos; ordena por força, custo-benefício,
   juventude, estrelas, valor ou salário.
 
+## Prestígio internacional dos clubes
+
+- Cada clube tem uma reputação fora do país: **Regional, Nacional, Continental, Intercontinental ou
+  Mundial**.
+- **Mundial:** campeões do mundo. Contam a Copa Intercontinental (a FIFA reconheceu os vencedores de
+  1960–2004 em 2017), o Mundial de Clubes FIFA e também títulos mundiais não reconhecidos: Copa Rio
+  (Palmeiras 1951, confirmada pela FIFA em 2014 como 1º torneio mundial de clubes, tema polêmico;
+  Fluminense 1952), Pequeña Copa del Mundo (Millonarios 1953, Corinthians 1953, São Paulo 1955) e o
+  Torneio Octogonal Rivadavia (Vasco 1953).
+- **Intercontinental:** títulos internacionais (Libertadores, Sul-Americana, Recopa, Supercopa, Conmebol,
+  Mercosul, Concacaf, Leagues Cup…), campanhas lendárias (Bahia 1959, as 4 finais do América de Cali)
+  ou ídolos que marcaram época, inclusive na seleção (Garrincha e Nilton Santos no Botafogo).
+- **Continental:** finalistas e semifinalistas de torneios continentais (Fortaleza, Bragantino,
+  LAFC…).
+- Os demais dependem da divisão e da reputação; os europeus genéricos, da liga e da reputação.
+- Títulos conquistados **na carreira** sobem o nível: um título internacional dá Intercontinental e o
+  Mundial de Clubes dá Mundial.
+- **Regra de mercado:** craques (5★ ou mais) dos clubes da elite das **5 grandes ligas** (Inglaterra,
+  Espanha, Alemanha, Itália e França) só aceitam negociar com clubes de reputação **Intercontinental
+  ou Mundial**. O mercado mostra o aviso e bloqueia compra e empréstimo.
+- A galeria do clube mostra a "Tradição e história real": mundiais (marcados FIFA / não FIFA),
+  títulos internacionais e lendas.
+
+## América do Norte
+
+- **MLS** (30 clubes reais, 27 dos EUA e 3 do Canadá): conferências Leste e Oeste em turno e returno,
+  8 de cada lado nos playoffs, final da MLS Cup. Sem rebaixamento.
+- **Liga MX** (18 clubes): Clausura (jan–mai) e Apertura (jul–dez), turno único + Liguilla em ida e
+  volta. Rebaixamento suspenso, como na realidade. O Atlante volta no Apertura 2026 no lugar do Mazatlán.
+- **Canadian Premier League** (8 clubes) com playoffs.
+- **Copas:** U.S. Open Cup (clubes dos EUA), Canadian Championship (MLS canadenses + CPL) e
+  **Leagues Cup** (16 da MLS × 16 da Liga MX, grupos e mata-mata em julho/agosto).
+- **Concacaf Champions Cup:** 27 clubes (9 da MLS, incluindo o campeão da copa canadense; 9 da Liga MX;
+  9 da América Central e Caribe), mata-mata em ida e volta e final única; os campeões da MLS e da
+  Liga MX e os 3 melhores centro-americanos entram nas oitavas.
+- **Mundial de Clubes:** 4 vagas da Concacaf para os campeões recentes da Champions Cup (completadas pelo
+  ranking); quando a Concacaf é sede, um clube dos EUA entra como anfitrião.
+- Negociações com MLS e Liga MX são em dólar. Saves antigos recebem os clubes reais automaticamente
+  (os genéricos da Concacaf deixam de existir e os jogadores ficam livres).
+
 ## Escalação por toque
 
 - Toque numa vaga do campo: abre a lista de quem pode jogar ali (banco, titulares que trocam de lugar e

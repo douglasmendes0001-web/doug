@@ -1,6 +1,7 @@
 // Criação do "mundo" do jogo: clubes de todas as ligas, clubes externos para
 // torneios internacionais e os elencos completos.
 
+import { CENTRO_CARIBE, CPL, LIGA_MX, MLS_LESTE, MLS_OESTE, type ClubeNA } from './data/americaNorte';
 import { baseTicketPrice, clubRevenue, revenueFloorFor, roundMoney } from './economy';
 import { CIDADES_UF, SERIE_A, SERIE_B, SERIE_C, SERIE_D, type ClubSeed } from './data/brasil';
 import { EUROPA, MUNDO, SUFIXOS_MUNDO, type CitySeed } from './data/europa';
@@ -32,6 +33,7 @@ interface ClubDraft {
   rankFrac: number;
   forceRange: [number, number];
   eco: number;
+  conference?: 'Leste' | 'Oeste';
 }
 
 export interface World {
@@ -112,6 +114,9 @@ export function createWorld(seed: number): World {
     addList(e.second, eu(`${e.country}2`, 3));
   }
 
+  // ---- América do Norte, Central e Caribe ----
+  drafts.push(...northAmericaDrafts());
+
   // ---- Outras confederações (Mundial de Clubes) ----
   const forcaConfed: Record<string, [number, number]> = { AFC: [38, 62], CAF: [32, 52], CONCACAF: [36, 58], OFC: [15, 30] };
   for (const pool of MUNDO) {
@@ -128,6 +133,52 @@ export function createWorld(seed: number): World {
   }
 
   return buildClubsAndPlayers(drafts, rng);
+}
+
+/** Clubes reais da MLS, Liga MX, liga canadense, América Central e Caribe. */
+function northAmericaDrafts(): ClubDraft[] {
+  const out: ClubDraft[] = [];
+  const add = (list: ClubeNA[], leagueId: string | null, conference?: 'Leste' | 'Oeste') => {
+    const l = leagueId ? leagueById(leagueId) : undefined;
+    list.forEach((s, i) => out.push({
+      name: s[0], short: s[1], country: s[6] ?? l!.country, city: s[2], tier: l ? l.tier : 0, leagueId, altitude: s[3],
+      colors: [s[4], s[5]], rankFrac: list.length > 1 ? i / (list.length - 1) : 0, forceRange: l ? l.force : [22, 38],
+      eco: l ? l.eco : 0.1, conference,
+    }));
+  };
+  add(MLS_LESTE, 'USA1', 'Leste');
+  add(MLS_OESTE, 'USA1', 'Oeste');
+  add(LIGA_MX, 'MEX1');
+  add(CPL, 'CAN1');
+  add(CENTRO_CARIBE, null);
+  return out;
+}
+
+/**
+ * Saves antigos (até a versão 3): acrescenta os clubes reais da América do
+ * Norte ao mundo e desativa os clubes genéricos da Concacaf que existiam só
+ * para o Mundial (os jogadores deles ficam livres no mercado).
+ */
+export function appendNorthAmerica(world: World, seed: number, freeAgentId: number) {
+  for (const c of world.clubs) {
+    if (c.confed !== 'CONCACAF' || c.leagueId) continue;
+    for (const pid of c.playerIds) world.players[pid].clubId = freeAgentId;
+    c.playerIds = [];
+    c.tier = -1;
+  }
+  const novo = buildClubsAndPlayers(northAmericaDrafts(), new Rng(seed ^ 0x4e41));
+  const offC = world.clubs.length;
+  const offP = world.players.length;
+  for (const p of novo.players) {
+    p.id += offP;
+    p.clubId += offC;
+    world.players.push(p);
+  }
+  for (const c of novo.clubs) {
+    c.id += offC;
+    c.playerIds = c.playerIds.map((id) => id + offP);
+    world.clubs.push(c);
+  }
 }
 
 function addEstadualFillers(drafts: ClubDraft[], rng: Rng) {
@@ -171,6 +222,7 @@ function buildClubsAndPlayers(drafts: ClubDraft[], rng: Rng): World {
       money: 0, ticketPrice: 0, playerIds: [], baseForce,
       baseLevel: clamp(Math.round(1 + 3 * (1 - d.rankFrac) * ecoCap + (d.eco > 1 ? 1 : 0)), 1, 5),
       youthIds: [], baseInvest: 0, investors: [],
+      ...(d.conference ? { conference: d.conference } : {}),
     };
     SQUAD_TEMPLATE.forEach((pos, i) => {
       const p = createPlayer(rng, players.length, id, d.country, pos, baseForce, { reserve: i % 2 === 1 && pos !== 'G' ? i > 12 : i === 2 });

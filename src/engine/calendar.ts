@@ -14,6 +14,16 @@ function trackScope(track: string): string {
   return track.split('-')[0];
 }
 
+/** Trilhas com clubes de mais de um país (MLS tem canadenses; a Leagues Cup junta MLS e Liga MX). */
+const PAISES_DA_TRILHA: Record<string, string[]> = {
+  'USA-liga': ['USA', 'CAN'],
+  'NA-copa': ['USA', 'CAN', 'MEX'],
+};
+
+function paisesDe(track: string): string[] {
+  return PAISES_DA_TRILHA[track] ?? [trackScope(track)];
+}
+
 export function tracksConflict(a: string, b: string): boolean {
   if (a === b) return false;
   const sa = trackScope(a);
@@ -22,9 +32,12 @@ export function tracksConflict(a: string, b: string): boolean {
   const aConf = CONFEDS.has(sa);
   const bConf = CONFEDS.has(sb);
   if (aConf && bConf) return false;
-  if (!aConf && !bConf) return sa === sb;
-  const [conf, country] = aConf ? [sa, sb] : [sb, sa];
-  return PAISES[country as CountryCode]?.confed === conf;
+  if (!aConf && !bConf) {
+    const pb = paisesDe(b);
+    return paisesDe(a).some((x) => pb.includes(x));
+  }
+  const [conf, track] = aConf ? [sa, b] : [sb, a];
+  return paisesDe(track).some((country) => PAISES[country as CountryCode]?.confed === conf);
 }
 
 export function slotWeek(slot: number): number {

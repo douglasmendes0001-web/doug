@@ -49,7 +49,7 @@ function Tables({ state, comp, stageIdx }: { state: GameState; comp: Competition
     <>
       {st.tables.map((table, gi) => (
         <div key={gi} style={{ marginBottom: 10 }}>
-          {st.tables.length > 1 && <h3>Grupo {String.fromCharCode(65 + gi)}</h3>}
+          {st.tables.length > 1 && <h3>{comp.def.leagueId === 'USA1' && st.tables.length === 2 ? `Conferência ${gi === 0 ? 'Leste' : 'Oeste'}` : `Grupo ${String.fromCharCode(65 + gi)}`}</h3>}
           <table className="tbl">
             <thead><tr><th>#</th><th>Clube</th><th>P</th><th>J</th><th>V</th><th>E</th><th>D</th><th>SG</th></tr></thead>
             <tbody>
@@ -123,7 +123,7 @@ export function Competitions() {
   const [country, setCountry] = useState<string>('MINE');
   const list = useMemo(() => {
     if (country === 'MINE') return mine;
-    if (country === 'INT') return state.competitions.filter((c) => c.def.kind === 'continental' || c.def.kind === 'mundial');
+    if (country === 'INT') return state.competitions.filter((c) => c.def.kind === 'continental' || c.def.kind === 'mundial' || !c.def.country);
     return state.competitions.filter((c) => c.def.country === country);
   }, [country, state.competitions, mine]);
   const [compId, setCompId] = useState<string>(mine[0]?.def.id ?? state.competitions[0].def.id);

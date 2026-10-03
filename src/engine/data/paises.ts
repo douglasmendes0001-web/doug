@@ -52,11 +52,19 @@ export const PAISES: Record<CountryCode, CountryMeta> = {
   USA: { name: 'Estados Unidos', confed: 'CONCACAF', temp: 15, amp: 10, hotMonth: 6, rain: 0.2, hotness: 0.45, flag: ['#1f3f99', '#ffffff', '#d0021b'] },
   CAN: { name: 'Canadá', confed: 'CONCACAF', temp: 8, amp: 14, hotMonth: 6, rain: 0.22, hotness: 0.15, flag: ['#d0021b', '#ffffff', '#d0021b'] },
   CRC: { name: 'Costa Rica', confed: 'CONCACAF', temp: 24, amp: 2, hotMonth: 3, rain: 0.35, hotness: 0.8, flag: ['#1f3f99', '#ffffff', '#d0021b'] },
+  HON: { name: 'Honduras', confed: 'CONCACAF', temp: 25, amp: 2, hotMonth: 4, rain: 0.3, hotness: 0.85, flag: ['#1f3f99', '#ffffff', '#1f3f99'] },
+  GUA: { name: 'Guatemala', confed: 'CONCACAF', temp: 21, amp: 2, hotMonth: 4, rain: 0.3, hotness: 0.6, flag: ['#4997d0', '#ffffff', '#4997d0'] },
+  SLV: { name: 'El Salvador', confed: 'CONCACAF', temp: 26, amp: 2, hotMonth: 3, rain: 0.3, hotness: 0.85, flag: ['#0f47af', '#ffffff', '#0f47af'] },
+  PAN: { name: 'Panamá', confed: 'CONCACAF', temp: 27, amp: 1, hotMonth: 3, rain: 0.4, hotness: 0.9, flag: ['#d21034', '#ffffff', '#005293'] },
+  JAM: { name: 'Jamaica', confed: 'CONCACAF', temp: 28, amp: 2, hotMonth: 7, rain: 0.25, hotness: 0.9, flag: ['#009b3a', '#fed100', '#000000'] },
   NZL: { name: 'Nova Zelândia', confed: 'OFC', temp: 14, amp: 5, hotMonth: 0, rain: 0.3, hotness: 0.3, flag: ['#1f3f99', '#d0021b', '#ffffff'] },
 };
 
 /** Países de onde costumam vir estrangeiros para cada mercado. */
 export const ESTRANGEIROS: Partial<Record<CountryCode, CountryCode[]>> = {
+  USA: ['ARG', 'COL', 'MEX', 'URU', 'BRA', 'ENG', 'ESP', 'VEN', 'CAN', 'JAM'],
+  CAN: ['USA', 'JAM', 'ENG', 'FRA', 'COL'],
+  MEX: ['ARG', 'COL', 'URU', 'PAR', 'ECU', 'CHI', 'USA', 'ESP'],
   BRA: ['ARG', 'URU', 'COL', 'PAR', 'ECU', 'CHI', 'VEN', 'POR'],
   ARG: ['URU', 'PAR', 'COL', 'CHI', 'BRA'],
   CHI: ['ARG', 'URU', 'COL', 'PAR', 'VEN'],

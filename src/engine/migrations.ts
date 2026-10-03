@@ -11,6 +11,7 @@ import { pushMessage } from './inbox';
 import { syncMoney } from './money';
 import { Rng } from './rng';
 import { initialSponsors } from './sponsors';
+import { appendNorthAmerica } from './world';
 import { FREE_AGENT, type Club, type GameState, type Player } from './types';
 
 /** Recalcula valores, salários, receitas e caixa de um mundo (carreira ou editor). */
@@ -55,5 +56,19 @@ export function migrarSave(state: GameState): GameState {
       'patrocínios e premiações. O caixa do clube foi recalculado e os contratos de patrocínio renegociados. Negociações com a Europa são em euro ' +
       'e com a América do Norte em dólar, sempre com a conversão para a moeda do clube.');
   }
+  if (state.version === 3) {
+    appendNorthAmerica(state, state.seed, FREE_AGENT);
+    state.nextIds.player = state.players.length;
+    state.version = 4;
+    pushMessage(state, 'midia', 'Futebol da América do Norte',
+      'A partir da próxima temporada entram em campo a MLS, a Liga MX, a liga canadense, a U.S. Open Cup, o Canadian Championship, a Leagues Cup e a Concacaf Champions Cup, ' +
+      'com os clubes reais. O campeão da Concachampions garante vaga no Mundial de Clubes. Clubes da MLS e da Liga MX já negociam no mercado (em dólar).');
+  }
   return state;
+}
+
+/** Banco do modo editor salvo em versões antigas. */
+export function migrarMundo(world: { clubs: Club[]; players: Player[] }, version: number, seed = 20260101) {
+  if (version === 2) migrarEconomiaMundo(world.clubs, world.players);
+  if (version <= 3) appendNorthAmerica(world, seed, FREE_AGENT);
 }

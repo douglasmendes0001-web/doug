@@ -93,7 +93,10 @@ describe('competições', () => {
     expect(count('SCO1')).toBe(12);
     expect(count('TUR1')).toBe(18);
     expect(count('GRE1')).toBe(14);
-    expect(LIGAS.length).toBe(34);
+    expect(count('USA1')).toBe(30);
+    expect(count('MEX1')).toBe(18);
+    expect(count('CAN1')).toBe(8);
+    expect(LIGAS.length).toBe(37);
   });
 });
 

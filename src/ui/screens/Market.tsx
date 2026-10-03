@@ -11,6 +11,7 @@ import { NIVEL, useBack } from '../back';
 import { useLoadedGame } from '../game';
 import { formatMoney } from '../format';
 import { PlayerRow } from './Squad';
+import { PRESTIGIO_MINIMO_CRAQUE, clubPrestige, craqueBig5, recusaPorPrestigio } from '../../engine/prestige';
 
 const POSICOES: Pos[] = ['G', 'LD', 'ZG', 'LE', 'VOL', 'MEI', 'ATA'];
 const PRECOS = [500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000, 25_000_000, 50_000_000, 100_000_000];
@@ -83,6 +84,8 @@ export function Market() {
   }, [f, club.money]);
   const results = useMemo(() => searchMarket(state, filtros), [filtros, state, state.slot]);
   const sel = confirm !== null ? state.players[confirm] : null;
+  const recusa = sel ? recusaPorPrestigio(state, club, sel) : null;
+  const prestigio = clubPrestige(state, club);
   const paises = (Object.keys(PAISES) as CountryCode[]).filter((code) => state.clubs.some((c) => c.country === code && c.leagueId));
   const minhaJanela = windowOpen(state, club.country);
   const europa = windowOpen(state, 'ENG');
@@ -205,6 +208,7 @@ export function Market() {
         <div key={p.id}>
           <div className="small muted market-line">
             {p.clubId === FREE_AGENT ? 'Sem clube · assina a qualquer momento' : `${state.clubs[p.clubId].name} (${PAISES[state.clubs[p.clubId].country].name}) · pede ${precoDe(p.id)}${p.forSale ? ' · à venda' : ''}`}
+            {prestigio < PRESTIGIO_MINIMO_CRAQUE && craqueBig5(state, p) && <span className="tag warn" style={{ marginLeft: 6 }}>exige clube intercontinental</span>}
           </div>
           <PlayerRow p={p} hideResp onClick={() => setConfirm(p.id)} />
         </div>
@@ -224,6 +228,7 @@ export function Market() {
             {sel.clubId !== FREE_AGENT && moedaDoPais(state.clubs[sel.clubId].country) !== moedaDoPais(club.country) && (
               <p className="small muted">Negociação em {moedaDoPais(state.clubs[sel.clubId].country) === 'EUR' ? 'euro' : 'dólar'}, convertida pelo câmbio do ano ({cambioLabel(moedaDoPais(state.clubs[sel.clubId].country), moedaDoPais(club.country))}).</p>
             )}
+            {recusa && <div className="warning small" style={{ margin: '8px 0' }}><b>Sem negociação:</b> {recusa}</div>}
             <h3>Duração do contrato</h3>
             <div className="choice-row">
               {[1, 2, 3, 4, 5].map((y) => (
@@ -232,11 +237,11 @@ export function Market() {
             </div>
             <p className="small muted">Contrato até dezembro de {state.year + years - 1}. Ao chegar, o respeito dele depende da sua experiência e da diferença de idade.</p>
             <div className="sheet-actions">
-              <button className="btn primary" onClick={() => run(() => buyPlayer(state, sel.id, years))}>
+              <button className="btn primary" disabled={!!recusa} onClick={() => run(() => buyPlayer(state, sel.id, years))}>
                 {sel.clubId === FREE_AGENT ? 'Assinar contrato' : `Comprar por ${precoDe(sel.id)}`}
               </button>
               {sel.clubId !== FREE_AGENT && (
-                <button className="btn" onClick={() => run(() => loanIn(state, sel.id))}>Pedir emprestado ({formatMoney(loanFee(sel))})</button>
+                <button className="btn" disabled={!!recusa} onClick={() => run(() => loanIn(state, sel.id))}>Pedir emprestado ({formatMoney(loanFee(sel))})</button>
               )}
               <button className="btn" onClick={() => setConfirm(null)}>Cancelar</button>
             </div>

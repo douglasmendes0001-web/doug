@@ -4,7 +4,7 @@
 
 import { del, get, set } from 'idb-keyval';
 import { SAVE_VERSION } from './season';
-import { migrarEconomiaMundo, migrarSave } from './migrations';
+import { migrarMundo, migrarSave } from './migrations';
 import { migratePlayers } from './players';
 import type { GameState } from './types';
 import type { World } from './world';
@@ -43,7 +43,7 @@ export async function saveGame(state: GameState): Promise<void> {
 export async function loadGame(slot: number): Promise<GameState | null> {
   try {
     const s = (await get(slotKey(slot))) as GameState | undefined;
-    if (!s || (s.version !== SAVE_VERSION && s.version !== 2)) return null;
+    if (!s || s.version < 2 || s.version > SAVE_VERSION) return null;
     s.saveSlot = slot;
     migratePlayers(s.players);
     migrarSave(s);
@@ -83,9 +83,9 @@ export async function deleteSave(slot: number): Promise<void> {
 export async function loadEditorWorld(): Promise<World | null> {
   try {
     const w = (await get(EDITOR_KEY)) as { version: number; world: World } | undefined;
-    if (!w || (w.version !== SAVE_VERSION && w.version !== 2)) return null;
+    if (!w || w.version < 2 || w.version > SAVE_VERSION) return null;
     migratePlayers(w.world.players);
-    if (w.version === 2) migrarEconomiaMundo(w.world.clubs, w.world.players);
+    if (w.version < SAVE_VERSION) migrarMundo(w.world, w.version);
     return w.world;
   } catch {
     return null;

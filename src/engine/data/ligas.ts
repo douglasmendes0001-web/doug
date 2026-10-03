@@ -28,6 +28,8 @@ export interface LeagueSeed {
   relegationBasis: 'final' | 'aggregate';
   /** Texto curto sobre o formato real e as simplificações feitas. */
   formatoReal: string;
+  /** Clubes divididos em conferências fixas (MLS: Leste e Oeste). */
+  conferencias?: boolean;
 }
 
 const pontosCorridos = (legs = 2): StageDef[] => [{ type: 'rr', name: 'Pontos corridos', groups: 1, legs }];
@@ -191,6 +193,43 @@ export const LIGAS: LeagueSeed[] = [
     tournaments: umTorneio('Liga Grega — 2ª Divisão', 'Grécia 2', pontosCorridos()),
     formatoReal: 'Simplificada em pontos corridos.',
   },
+  // ---------------- América do Norte ----------------
+  {
+    id: 'USA1', country: 'USA', tier: 1, force: [36, 54], eco: 0.6, relegationBasis: 'final', conferencias: true,
+    tournaments: umTorneio('Major League Soccer', 'MLS', [
+      { type: 'rr', name: 'Temporada regular', groups: 2, legs: 2, grouping: 'ranges', rangeSizes: [15, 15], advance: 8 },
+      { type: 'ko', name: 'Playoffs da MLS Cup', legs: 1 },
+    ], [6, 49]),
+    formatoReal: '30 clubes (27 dos EUA e 3 do Canadá) em duas conferências de 15, 34 rodadas; 9 por conferência vão aos playoffs e a final é a MLS Cup. Sem rebaixamento. No jogo: turno e returno dentro da conferência e 8 classificados por lado.',
+  },
+  {
+    id: 'MEX1', country: 'MEX', tier: 1, force: [38, 56], eco: 0.5, relegationBasis: 'aggregate',
+    tournaments: [
+      {
+        suffix: 'CL', name: 'Liga MX — Clausura', short: 'Clausura MX', window: [1, 21],
+        stages: [
+          { type: 'rr', name: 'Fase regular', groups: 1, legs: 1, advance: 8 },
+          { type: 'ko', name: 'Liguilla', legs: 2 },
+        ],
+      },
+      {
+        suffix: 'AP', name: 'Liga MX — Apertura', short: 'Apertura MX', window: [27, 50],
+        stages: [
+          { type: 'rr', name: 'Fase regular', groups: 1, legs: 1, advance: 8 },
+          { type: 'ko', name: 'Liguilla', legs: 2 },
+        ],
+      },
+    ],
+    formatoReal: '18 clubes; Clausura (jan-mai) e Apertura (jul-dez), 17 rodadas cada + Liguilla em ida e volta (7º a 10º jogam o play-in). Rebaixamento suspenso desde 2020. O Atlante volta no Apertura 2026 no lugar do Mazatlán.',
+  },
+  {
+    id: 'CAN1', country: 'CAN', tier: 1, force: [14, 26], eco: 0.05, relegationBasis: 'final',
+    tournaments: umTorneio('Canadian Premier League', 'CPL', [
+      { type: 'rr', name: 'Temporada regular', groups: 1, legs: 2, advance: 4 },
+      { type: 'ko', name: 'Playoffs', legs: 1 },
+    ], [14, 44]),
+    formatoReal: '8 clubes, 4 turnos (28 rodadas) e playoffs com 5. Sem rebaixamento. Os canadenses da MLS jogam a MLS. No jogo: turno e returno e playoffs com 4.',
+  },
 ];
 
 function europa(
@@ -277,4 +316,6 @@ export const COPAS: CupSeed[] = [
   { country: 'SCO', name: 'Copa da Escócia', short: 'Copa ESC', size: 22, stages: koUnico },
   { country: 'TUR', name: 'Copa da Turquia', short: 'Copa TUR', size: 38, stages: koUnico },
   { country: 'GRE', name: 'Copa da Grécia', short: 'Copa GRE', size: 30, stages: koUnico },
+  { country: 'USA', name: 'U.S. Open Cup', short: 'Open Cup', size: 27, stages: [{ type: 'ko', name: 'Mata-mata', legs: 1 }] },
+  { country: 'CAN', name: 'Canadian Championship', short: 'Copa CAN', size: 11, stages: [{ type: 'ko', name: 'Mata-mata', legs: 2, finalSingle: true }] },
 ];

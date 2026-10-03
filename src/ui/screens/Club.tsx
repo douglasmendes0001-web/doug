@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { NIVEL, useBack } from '../back';
 import { ClubCrest } from '../components/Art';
 import { Gallery } from './Gallery';
+import { PRESTIGIO_LABEL, clubPrestige } from '../../engine/prestige';
 import { roundMoney } from '../../engine/players';
 import { performanceLabel } from '../../engine/sponsors';
 import type { TreinoIntensidade } from '../../engine/types';
@@ -41,7 +42,7 @@ export function ClubScreen() {
       <div className="club-hero">
         <ClubCrest club={club} size={46} />
         <div style={{ minWidth: 0 }}>
-          <div className="club-hero-name">{club.name}</div>
+          <div className="club-hero-name">{club.name} <span className={`prestige-badge p${clubPrestige(state, club)}`}>{PRESTIGIO_LABEL[clubPrestige(state, club)]}</span></div>
           <div className="small muted">{club.stadium.name} · {club.stadium.capacity.toLocaleString('pt-BR')} lugares · CT {club.ct}/5 · base {club.baseLevel}/5</div>
         </div>
       </div>
